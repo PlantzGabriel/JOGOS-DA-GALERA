@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Pong com Áudio</title>
+  <style>
+    body { margin: 0; background: #000; color: #fff; font-family: Arial, sans-serif; text-align: center; }
+    #ui { margin: 10px; display: flex; justify-content: center; gap: 10px; align-items: center; }
+    canvas { background: #111; display: block; margin: 10px auto; border: 3px solid #333; }
+    button { padding: 8px 12px; border-radius: 6px; border: none; background: #222; color: #fff; cursor: pointer; }
+    button:hover { background: #333; }
+    .hint { font-size: 14px; color: #bbb; }
+  </style>
+</head>
+<body>
+  <h1>🎮 Pong com Áudio</h1>
+
+  <div id="ui">
+    <button id="startBtn">Clique para ativar áudio / iniciar</button>
+    <button id="muteBtn">🔊 Som: ON</button>
+    <div class="hint">Esquerda: W/S — Direita: ↑ / ↓</div>
+  </div>
+
+  <canvas id="gameCanvas" width="900" height="500"></canvas>
+
+  <script>
+    // --- Canvas e jogo (igualzinho, com controles invertidos) ---
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const paddleHeight = 100, paddleWidth = 20;
+    let playerLeft = { x: 20, y: canvas.height/2 - paddleHeight/2, score: 0, color: "#00BFFF" };
+    let playerRight = { x: canvas.width - paddleWidth - 20, y: canvas.height/2 - paddleHeight/2, score: 0, color: "#FF4500" };
+    let ball = { x: canvas.width/2, y: canvas.height/2, r: 12, dx: 4, dy: 3 };
+
+    const keys = {};
+    document.addEventListener("keydown", e => keys[e.key] = true);
+    document.addEventListener("keyup", e => keys[e.key] = false);
+
+    function drawPaddle(player) {
+      ctx.fillStyle = player.color;
+      ctx.fillRect(player.x, player.y, paddleWidth, paddleHeight);
+    }
+
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+      ctx.fillStyle = "white";
+      ctx.shadowColor = "rgba(255,255,255,0.7)";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.closePath();
+    }
+
+    function resetBall() {
+      ball.x = canvas.width/2;
+      ball.y = canvas.height/2;
+      // randomiza direção horizontal/vertical
+      ball.dx = (Math.random() > 0.5 ? 4 : -4);
+      ball.dy = (Math.random() > 0.5 ? 3 : -3);
+    }
+
+    // --- Audio: WebAudio setup (sem arquivos externos) ---
+    let audioCtx = null;
+    let masterGain = null;
+    let isMuted = false;
+
+    function initAudio() {
+      if (audioCtx) return;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(audioCtx.destination);
+    }
+
+    // Som curto de 'batida' (paddle hit) - pequeno bip com envelope rápido
+    function playHitSound() {
+      if (!audioCtx || isMuted) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 900 + Math.random() * 200; // varia um pouco
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.14);
+    }
+
+    // Som de ponto (mais grave e duradouro)
+    function playScoreSound() {
+      if (!audioCtx || isMuted) return;
+      // combinação de dois osciladores para som mais rico
+      const o1 = audioCtx.createOscillator();
+      const o2 = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      o1.type = "square"; o1.frequency.value = 220;
+      o2.type = "sine";   o2.frequency.value = 330;
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+      o1.connect(gain); o2.connect(gain);
+      gain.connect(masterGain);
+      o1.start(); o2.start();
+      o1.stop(audioCtx.currentTime + 0.62);
+      o2.stop(audioCtx.currentTime + 0.62);
+    }
+
+    // Efeito sonoro ao reiniciar (opcional)
+    function playResetSound() {
+      if (!audioCtx || isMuted) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = 440;
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.22);
+    }
+
+    // --- Jogo: update/draw com chamadas de som ---
+    function update() {
+      // Esquerda usa W/S
+      if (keys["w"] || keys["W"]) playerLeft.y -= 6;
+      if (keys["s"] || keys["S"]) playerLeft.y += 6;
+      // Direita usa setas
+      if (keys["ArrowUp"]) playerRight.y -= 6;
+      if (keys["ArrowDown"]) playerRight.y += 6;
+
+      // Limites
+      playerLeft.y = Math.max(0, Math.min(canvas.height - paddleHeight, playerLeft.y));
+      playerRight.y = Math.max(0, Math.min(canvas.height - paddleHeight, playerRight.y));
+
+      // Movimenta bola
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+
+      // Rebates topo/baixo
+      if (ball.y - ball.r < 0 || ball.y + ball.r > canvas.height) {
+        ball.dy *= -1;
+        // leve som de batida na parede (pode usar playHitSound com freq diferente — aqui reutilizamos)
+        playHitSound();
+      }
+
+      // Colisão com playerLeft
+      if (
+        ball.x - ball.r < playerLeft.x + paddleWidth &&
+        ball.y > playerLeft.y &&
+        ball.y < playerLeft.y + paddleHeight
+      ) {
+        ball.dx *= -1.07; // sobe velocidade
+        ball.x = playerLeft.x + paddleWidth + ball.r;
+        playHitSound();
+      }
+
+      // Colisão com playerRight
+      if (
+        ball.x + ball.r > playerRight.x &&
+        ball.y > playerRight.y &&
+        ball.y < playerRight.y + paddleHeight
+      ) {
+        ball.dx *= -1.07;
+        ball.x = playerRight.x - ball.r;
+        playHitSound();
+      }
+
+      // Pontuação
+      if (ball.x - ball.r < 0) {
+        playerRight.score++;
+        playScoreSound();
+        resetBall();
+        playResetSound();
+      }
+      if (ball.x + ball.r > canvas.width) {
+        playerLeft.score++;
+        playScoreSound();
+        resetBall();
+        playResetSound();
+      }
+    }
+
+    function drawScore() {
+      ctx.font = "34px Arial Black";
+      ctx.textAlign = "center";
+      ctx.fillStyle = playerLeft.color;
+      ctx.fillText(playerLeft.score, canvas.width/2 - 60, 50);
+      ctx.fillStyle = playerRight.color;
+      ctx.fillText(playerRight.score, canvas.width/2 + 60, 50);
+      ctx.textAlign = "start";
+    }
+
+    function drawMiddleLine() {
+      ctx.strokeStyle = "#444";
+      ctx.setLineDash([10, 10]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width/2, 0);
+      ctx.lineTo(canvas.width/2, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawMiddleLine();
+      drawPaddle(playerLeft);
+      drawPaddle(playerRight);
+      drawBall();
+      drawScore();
+      update();
+    }
+
+    let loopId = null;
+    function startLoop() {
+      if (loopId) return;
+      loopId = setInterval(draw, 1000/60);
+    }
+
+    // --- UI: start / mute ---
+    const startBtn = document.getElementById("startBtn");
+    const muteBtn = document.getElementById("muteBtn");
+
+    startBtn.addEventListener("click", () => {
+      initAudio();
+      // por segurança: resume se estiver suspenso (alguns navegadores exigem gesto do usuário)
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+      startBtn.disabled = true;
+      startBtn.textContent = "Áudio ativado • Jogo rodando";
+      startLoop();
+    });
+
+    muteBtn.addEventListener("click", () => {
+      isMuted = !isMuted;
+      muteBtn.textContent = isMuted ? "🔇 Som: OFF" : "🔊 Som: ON";
+      // também reduz ganho master pra 0 (se preferir)
+      if (masterGain) masterGain.gain.value = isMuted ? 0 : 1;
+    });
+
+    // Inicia o desenho (mas áudio só após clique)
+    draw(); // um frame inicial
+    // não liga loop automático — espera o usuário clicar Start (para ativar áudio também)
+  </script>
+</body>
+</html>
