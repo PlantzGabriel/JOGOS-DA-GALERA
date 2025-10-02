@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Pomgol 🎮</title>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #0f0f0f, #1c1c1c);
+      color: #fff;
+      font-family: "Segoe UI", Arial, sans-serif;
+      text-align: center;
+      user-select: none;
+    }
+    h1 {
+      margin-top: 40px;
+      font-size: 60px;
+      color: #00ffcc;
+      text-shadow: 0 0 15px #00ffaa, 0 0 30px #008877;
+    }
+    #menu, #skinsMenu, #difficultyMenu, #achievementsMenu, #creditsScreen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 40px;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 18px;
+      border-radius: 10px;
+      border: none;
+      background: #222;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    button:hover {
+      background: #00ffcc;
+      color: #000;
+      transform: scale(1.05);
+    }
+    .backBtn {
+      margin-top: 20px;
+      font-size: 16px;
+      background: #333;
+      border: 2px solid #00ffcc;
+    }
+    .backBtn:hover {
+      background: #00ffcc;
+      color: #000;
+    }
+    canvas {
+      display: none;
+      background: #111;
+      margin: 20px auto;
+      border: 4px solid #00ffcc;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #00ffaa66;
+    }
+    /* Skins grid */
+    .skins-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 120px);
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .skin-card {
+      width: 120px;
+      height: 120px;
+      border: 3px solid #00ffcc;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+      background: #222;
+      transition: all 0.3s;
+    }
+    .skin-card.locked {
+      filter: grayscale(100%);
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .skin-card:hover:not(.locked) {
+      transform: scale(1.1);
+      background: #00ffcc;
+      color: #000;
+    }
+    /* Achievements */
+    .achievement {
+      padding: 10px;
+      background: #222;
+      border-radius: 8px;
+      border: 2px solid #00ffcc;
+      margin: 8px 0;
+      width: 300px;
+      text-align: left;
+    }
+    .achievement.locked {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pomgol 🎮</h1>
+
+  <!-- Menu Principal -->
+  <div id="menu" style="display:flex;">
+    <button onclick="startGame('single')">▶ Jogar</button>
+    <button onclick="startGame('multi')">👥 Multiplayer</button>
+    <button onclick="showScreen('skinsMenu')">🎨 Skins</button>
+    <button onclick="showScreen('difficultyMenu')">⚙️ Dificuldade</button>
+    <button onclick="showScreen('achievementsMenu')">🏆 Conquistas</button>
+    <button onclick="showScreen('creditsScreen')">ℹ️ Créditos</button>
+    <button onclick="alert('Volte sempre!')">🚪 Sair</button>
+  </div>
+
+  <!-- Menu de Skins -->
+  <div id="skinsMenu">
+    <h2>🎨 Selecione sua Skin</h2>
+    <div class="skins-grid" id="skinsGrid"></div>
+    <button class="backBtn" onclick="showScreen('menu')">⬅️ Voltar</button>
+  </div>
+
+  <!-- Menu de Dificuldade -->
+  <div id="difficultyMenu">
+    <h2>⚙️ Selecione a Dificuldade</h2>
+    <button onclick="setDifficulty('easy')">😎 Fácil</button>
+    <button onclick="setDifficulty('medium')">🙂 Médio</button>
+    <button onclick="setDifficulty('hard')">🔥 Difícil</button>
+    <button class="backBtn" onclick="showScreen('menu')">⬅️ Voltar</button>
+  </div>
+
+  <!-- Menu de Conquistas -->
+  <div id="achievementsMenu">
+    <h2>🏆 Conquistas</h2>
+    <div id="achievementsList"></div>
+    <button class="backBtn" onclick="showScreen('menu')">⬅️ Voltar</button>
+  </div>
+
+  <!-- Créditos -->
+  <div id="creditsScreen">
+    <h2>👨‍💻 Créditos</h2>
+    <p>Desenvolvido com ❤️ em JavaScript</p>
+    <button class="backBtn" onclick="showScreen('menu')">⬅️ Voltar</button>
+  </div>
+
+  <!-- Jogo -->
+  <canvas id="gameCanvas" width="900" height="500"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let gameMode = "single";
+    let difficulty = "medium";
+    let unlockedSkins = ["default"];
+    let selectedSkin = "default";
+
+    const keys = {};
+    document.addEventListener("keydown", e => keys[e.key] = true);
+    document.addEventListener("keyup", e => keys[e.key] = false);
+
+    // --- Conquistas
+    const achievements = [
+      { id: "firstPoint", name: "Primeiro Ponto", desc: "Marque seu primeiro ponto.", unlocked: false, unlocksSkin: "blue" },
+      { id: "fivePoints", name: "Mestre da Mesa", desc: "Marque 5 pontos em uma partida.", unlocked: false, unlocksSkin: "red" },
+      { id: "winMatch", name: "Vitória!", desc: "Ganhe uma partida.", unlocked: false, unlocksSkin: "gold" }
+    ];
+
+    function unlockAchievement(id) {
+      const ach = achievements.find(a => a.id === id);
+      if (ach && !ach.unlocked) {
+        ach.unlocked = true;
+        unlockedSkins.push(ach.unlocksSkin);
+        alert(`🏆 Conquista desbloqueada: ${ach.name}! Nova skin liberada: ${ach.unlocksSkin}`);
+      }
+    }
+
+    // Mostrar telas
+    function showScreen(id) {
+      ["menu","skinsMenu","difficultyMenu","achievementsMenu","creditsScreen"]
+        .forEach(s => document.getElementById(s).style.display = "none");
+      if (id !== "none") document.getElementById(id).style.display = "flex";
+      canvas.style.display = "none";
+      if (id === "skinsMenu") renderSkins();
+      if (id === "achievementsMenu") renderAchievements();
+    }
+
+    // Renderizar skins
+    function renderSkins() {
+      const grid = document.getElementById("skinsGrid");
+      grid.innerHTML = "";
+      ["default","blue","red","gold"].forEach(skin => {
+        const div = document.createElement("div");
+        div.className = "skin-card";
+        div.textContent = skin.toUpperCase();
+        if (!unlockedSkins.includes(skin)) {
+          div.classList.add("locked");
+        } else {
+          div.onclick = () => { selectedSkin = skin; alert("Skin selecionada: " + skin); };
+        }
+        grid.appendChild(div);
+      });
+    }
+
+    // Renderizar conquistas
+    function renderAchievements() {
+      const list = document.getElementById("achievementsList");
+      list.innerHTML = "";
+      achievements.forEach(a => {
+        const div = document.createElement("div");
+        div.className = "achievement" + (a.unlocked ? "" : " locked");
+        div.innerHTML = `<strong>${a.name}</strong><br><small>${a.desc}</small>`;
+        list.appendChild(div);
+      });
+    }
+
+    // Definir dificuldade
+    function setDifficulty(d) {
+      difficulty = d;
+      alert("Dificuldade definida: " + d);
+      showScreen("menu");
+    }
+
+    // --- Jogo Pong ---
+    let paddleHeight = 100, paddleWidth = 20;
+    let playerLeft, playerRight, ball;
+    let loopId;
+
+    function resetBall() {
+      ball.x = canvas.width/2;
+      ball.y = canvas.height/2;
+      ball.dx = (Math.random() > 0.5 ? 4 : -4);
+      ball.dy = (Math.random() > 0.5 ? 3 : -3);
+      if (difficulty === "easy") { ball.dx *= 0.7; ball.dy *= 0.7; }
+      if (difficulty === "hard") { ball.dx *= 1.3; ball.dy *= 1.3; }
+    }
+
+    function startGame(mode) {
+      gameMode = mode;
+      showScreen("none");
+      canvas.style.display = "block";
+
+      playerLeft = { x: 20, y: canvas.height/2 - paddleHeight/2, score: 0, color: getSkinColor(selectedSkin) };
+      playerRight = { x: canvas.width - paddleWidth - 20, y: canvas.height/2 - paddleHeight/2, score: 0, color: "#FF4500" };
+      ball = { x: canvas.width/2, y: canvas.height/2, r: 12, dx: 4, dy: 3 };
+
+      resetBall();
+      if (loopId) clearInterval(loopId);
+      loopId = setInterval(gameLoop, 1000/60);
+    }
+
+    function getSkinColor(skin) {
+      if (skin === "blue") return "#00BFFF";
+      if (skin === "red") return "#FF4444";
+      if (skin === "gold") return "gold";
+      return "#00ffcc";
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      // Controles jogador esquerdo
+      if (keys["w"] || keys["W"]) playerLeft.y -= 6;
+      if (keys["s"] || keys["S"]) playerLeft.y += 6;
+
+      // Controles jogador direito
+      if (gameMode === "multi") {
+        if (keys["ArrowUp"]) playerRight.y -= 6;
+        if (keys["ArrowDown"]) playerRight.y += 6;
+      } else {
+        // IA
+        let speed = difficulty === "easy" ? 3 : difficulty === "medium" ? 5 : 7;
+        if (ball.y < playerRight.y + paddleHeight/2) playerRight.y -= speed;
+        else playerRight.y += speed;
+      }
+
+      // Limites
+      playerLeft.y = Math.max(0, Math.min(canvas.height - paddleHeight, playerLeft.y));
+      playerRight.y = Math.max(0, Math.min(canvas.height - paddleHeight, playerRight.y));
+
+      // Bola
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+      if (ball.y - ball.r < 0 || ball.y + ball.r > canvas.height) ball.dy *= -1;
+
+      // Colisões
+      if (ball.x - ball.r < playerLeft.x + paddleWidth &&
+          ball.y > playerLeft.y && ball.y < playerLeft.y + paddleHeight) {
+        ball.dx *= -1.05;
+        ball.x = playerLeft.x + paddleWidth + ball.r;
+      }
+      if (ball.x + ball.r > playerRight.x &&
+          ball.y > playerRight.y && ball.y < playerRight.y + paddleHeight) {
+        ball.dx *= -1.05;
+        ball.x = playerRight.x - ball.r;
+      }
+
+      // Pontuação
+      if (ball.x - ball.r < 0) {
+        playerRight.score++;
+        resetBall();
+      }
+      if (ball.x + ball.r > canvas.width) {
+        playerLeft.score++;
+        if (playerLeft.score === 1) unlockAchievement("firstPoint");
+        if (playerLeft.score === 5) unlockAchievement("fivePoints");
+        resetBall();
+      }
+
+      // Vitória
+      if (playerLeft.score >= 10) {
+        unlockAchievement("winMatch");
+        endGame("Você venceu!");
+      }
+      if (playerRight.score >= 10) {
+        endGame("Você perdeu!");
+      }
+
+      // Desenhar
+      ctx.fillStyle = playerLeft.color;
+      ctx.fillRect(playerLeft.x, playerLeft.y, paddleWidth, paddleHeight);
+
+      ctx.fillStyle = playerRight.color;
+      ctx.fillRect(playerRight.x, playerRight.y, paddleWidth, paddleHeight);
+
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+
+      ctx.fillStyle = playerLeft.color;
+      ctx.font = "34px Arial Black";
+      ctx.fillText(playerLeft.score, canvas.width/2 - 60, 50);
+
+      ctx.fillStyle = playerRight.color;
+      ctx.fillText(playerRight.score, canvas.width/2 + 60, 50);
+    }
+
+    function endGame(msg) {
+      clearInterval(loopId);
+      alert(msg);
+      showScreen("menu");
+    }
+  </script>
+</body>
+</html>
