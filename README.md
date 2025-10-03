@@ -1,4 +1,5 @@
-# 💕JOGOS-DA-GALERA💕
+# 💕JOGOS-DA-GALERA💕![MeowDancingCatGIF](https://github.com/user-attachments/assets/2a134bf8-1644-47da-8438-f7c616923c32)
+�
 <h1>OS MELHORES JOGOS DA GALERA<br>
 👍👍👌👌😲😲💯💯🥶🥶</h1>
 <br>
