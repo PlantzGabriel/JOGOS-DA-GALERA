@@ -1,7 +1,7 @@
 # 💕JOGOS-DA-GALERA💕
 
 <h1>OS MELHORES JOGOS DA GALERA<br>
-👍👍👉👉👌👌😲😲💯💯🥶![SoExcited~GIF (2)](https://github.com/user-attachments/assets/9fbe7a33-fea1-452c-bf7a-e0b623ef20f5)
+👍👍👉👉👌👌😲😲💯💯🥶(https://github.com/user-attachments/assets/9fbe7a33-fea1-452c-bf7a-e0b623ef20f5)
 </h1>
 <br>
 <h2>🏓POMGOL🏓</h2>
