@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Felipe Nascimento (f5-nascimento)</title>
+<style>
+    body { margin: 0; overflow: hidden; background: #111; }
+    canvas { display: block; margin: 0 auto; background: #222; }
+</style>
+<link rel="shortcut icon" href="Eneias.svg" type="image/x-icon">
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 600;
+canvas.height = 800;
+
+// Player
+const player = {
+    x: canvas.width/2 - 20,
+    y: canvas.height - 60,
+    width: 40,
+    height: 40,
+    speed: 5,
+    bullets: [],
+    img: new Image()
+};
+// Substitua pelo nome do seu arquivo local, ex: "player.png"
+player.img.src = 'Eneias.svg'; 
+
+// Inimigos
+let enemies = [];
+let enemySpawnInterval = 1000; // 1 segundo
+let lastEnemySpawn = 0;
+const enemyImg = new Image();
+// Substitua pelo nome do seu arquivo local, ex: "enemy.png"
+enemyImg.src = 'EneiasReverso.svg'; 
+
+// Controle de teclado
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// Tiro
+function shoot() {
+    player.bullets.push({ x: player.x + player.width/2 - 5, y: player.y, width: 10, height: 20, speed: 7 });
+}
+
+// Spawna inimigos
+function spawnEnemy() {
+    const size = 40;
+    const x = Math.random() * (canvas.width - size);
+    enemies.push({ x, y: -size, width: size, height: size });
+}
+
+// Atualiza o jogo
+function update(deltaTime) {
+    // Movimento do jogador
+    if (keys['a'] && player.x > 0) player.x -= player.speed;
+    if (keys['d'] && player.x + player.width < canvas.width) player.x += player.speed;
+    if (keys['w'] && player.y > 0) player.y -= player.speed;
+    if (keys['s'] && player.y + player.height < canvas.height) player.y += player.speed;
+
+    // Tiro
+    if (keys[' ']) {
+        if (!keys.shootCooldown) {
+            shoot();
+            keys.shootCooldown = 10; // frames de cooldown
+        }
+    }
+    if (keys.shootCooldown) keys.shootCooldown--;
+
+    // Atualiza balas
+    player.bullets.forEach((b, i) => {
+        b.y -= b.speed;
+        if (b.y + b.height < 0) player.bullets.splice(i, 1);
+    });
+
+    // Spawn de inimigos
+    if (Date.now() - lastEnemySpawn > enemySpawnInterval) {
+        spawnEnemy();
+        lastEnemySpawn = Date.now();
+    }
+
+    // Atualiza inimigos
+    enemies.forEach((e, i) => {
+        e.y += 2; // velocidade fixa
+
+        // Colisão com balas
+        player.bullets.forEach((b, j) => {
+            if (b.x < e.x + e.width && b.x + b.width > e.x &&
+                b.y < e.y + e.height && b.y + b.height > e.y) {
+                enemies.splice(i,1);
+                player.bullets.splice(j,1);
+            }
+        });
+
+        // Remove inimigo fora da tela
+        if (e.y > canvas.height) enemies.splice(i,1);
+    });
+}
+
+// Desenha tudo
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Desenha jogador
+    ctx.drawImage(player.img, player.x, player.y, player.width, player.height);
+
+    // Desenha balas
+    ctx.fillStyle = 'yellow';
+    player.bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+
+    // Desenha inimigos
+    enemies.forEach(e => {
+        ctx.drawImage(enemyImg, e.x, e.y, e.width, e.height);
+    });
+}
+
+// Loop principal
+let lastTime = 0;
+function gameLoop(timestamp) {
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    update(deltaTime);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
