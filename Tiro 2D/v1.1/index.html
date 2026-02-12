@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Jogo de Horda 2D com Inimigos Atirando</title>
+<style>
+    body { margin: 0; overflow: hidden; background: #111; }
+    canvas { display: block; margin: 0 auto; background: #222; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 600;
+canvas.height = 800;
+
+// Player
+const player = {
+    x: canvas.width/2 - 20,
+    y: canvas.height - 60,
+    width: 40,
+    height: 40,
+    speed: 5,
+    bullets: [],
+    img: new Image(),
+    hp: 100,
+    maxHp: 100
+};
+player.img.src = 'Eneias.svg'; // sua imagem local
+
+// Inimigos
+let enemies = [];
+let enemySpawnInterval = 1500;
+let lastEnemySpawn = 0;
+const enemyImg = new Image();
+enemyImg.src = 'EneiasReverso.svg'; // sua imagem local
+const enemyBullets = [];
+
+// Controle de teclado
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// Função de tiro do jogador
+function shoot() {
+    player.bullets.push({ x: player.x + player.width/2 - 5, y: player.y, width: 10, height: 20, speed: 7, damage: 25 });
+}
+
+// Spawna inimigos
+function spawnEnemy() {
+    const size = 40;
+    const x = Math.random() * (canvas.width - size);
+    enemies.push({
+        x, y: -size, width: size, height: size,
+        hp: 50, maxHp: 50, speed: 2,
+        shootCooldown: Math.floor(Math.random() * 100) // para que não atirem todos no mesmo frame
+    });
+}
+
+// Função de tiro dos inimigos
+function enemyShoot(e) {
+    // Calcula direção para o jogador
+    const dx = (player.x + player.width/2) - (e.x + e.width/2);
+    const dy = (player.y + player.height/2) - (e.y + e.height/2);
+    const mag = Math.sqrt(dx*dx + dy*dy);
+    const speed = 4;
+    enemyBullets.push({
+        x: e.x + e.width/2 - 5,
+        y: e.y + e.height,
+        dx: (dx/mag) * speed,
+        dy: (dy/mag) * speed,
+        width: 10,
+        height: 10,
+        damage: 10
+    });
+}
+
+// Atualiza o jogo
+function update(deltaTime) {
+    // Movimento do jogador
+    if (keys['a'] && player.x > 0) player.x -= player.speed;
+    if (keys['d'] && player.x + player.width < canvas.width) player.x += player.speed;
+    if (keys['w'] && player.y > 0) player.y -= player.speed;
+    if (keys['s'] && player.y + player.height < canvas.height) player.y += player.speed;
+
+    // Tiro do jogador
+    if (keys[' ']) {
+        if (!keys.shootCooldown) {
+            shoot();
+            keys.shootCooldown = 10;
+        }
+    }
+    if (keys.shootCooldown) keys.shootCooldown--;
+
+    // Atualiza balas do jogador
+    player.bullets.forEach((b, i) => {
+        b.y -= b.speed;
+
+        // Colisão com inimigos
+        enemies.forEach((e, j) => {
+            if (b.x < e.x + e.width && b.x + b.width > e.x &&
+                b.y < e.y + e.height && b.y + b.height > e.y) {
+                e.hp -= b.damage;
+                player.bullets.splice(i, 1);
+            }
+        });
+
+        // Remove bala fora da tela
+        if (b.y + b.height < 0 && player.bullets[i]) player.bullets.splice(i,1);
+    });
+
+    // Spawn de inimigos
+    if (Date.now() - lastEnemySpawn > enemySpawnInterval) {
+        spawnEnemy();
+        lastEnemySpawn = Date.now();
+    }
+
+    // Atualiza inimigos
+    enemies.forEach((e, i) => {
+        e.y += e.speed;
+
+        // Disparo inimigo
+        if (!e.shootCooldown) {
+            enemyShoot(e);
+            e.shootCooldown = 100 + Math.floor(Math.random()*100); // tempo até próximo tiro
+        } else {
+            e.shootCooldown--;
+        }
+
+        // Remove inimigo morto ou fora da tela
+        if (e.hp <= 0 || e.y > canvas.height) enemies.splice(i,1);
+    });
+
+    // Atualiza balas inimigas
+    enemyBullets.forEach((b,i) => {
+        b.x += b.dx;
+        b.y += b.dy;
+
+        // Colisão com jogador
+        if (b.x < player.x + player.width && b.x + b.width > player.x &&
+            b.y < player.y + player.height && b.y + b.height > player.y) {
+            player.hp -= b.damage;
+            enemyBullets.splice(i,1);
+        }
+
+        // Remove fora da tela
+        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) enemyBullets.splice(i,1);
+    });
+}
+
+// Desenha barras de vida
+function drawHealthBar(x, y, width, height, hp, maxHp) {
+    ctx.fillStyle = 'red';
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = 'lime';
+    ctx.fillRect(x, y, width * (hp / maxHp), height);
+    ctx.strokeStyle = 'black';
+    ctx.strokeRect(x, y, width, height);
+}
+
+// Desenha tudo
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Jogador
+    ctx.drawImage(player.img, player.x, player.y, player.width, player.height);
+    drawHealthBar(player.x, player.y - 10, player.width, 5, player.hp, player.maxHp);
+
+    // Balas do jogador
+    ctx.fillStyle = 'yellow';
+    player.bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+
+    // Inimigos
+    enemies.forEach(e => {
+        ctx.drawImage(enemyImg, e.x, e.y, e.width, e.height);
+        drawHealthBar(e.x, e.y - 5, e.width, 5, e.hp, e.maxHp);
+    });
+
+    // Balas inimigas
+    ctx.fillStyle = 'orange';
+    enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+}
+
+// Loop principal
+let lastTime = 0;
+function gameLoop(timestamp) {
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    update(deltaTime);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
