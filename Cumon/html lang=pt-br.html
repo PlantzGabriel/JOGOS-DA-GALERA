@@ -1,0 +1,591 @@
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Monsters - Complete Edition v2</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        /* --- Estilos Globais --- */
+        * { box-sizing: border-box; }
+        body { 
+            background: #1a1a2e; display: flex; justify-content: center; align-items: center; 
+            height: 100vh; margin: 0; font-family: 'Press Start 2P', cursive; color: #333;
+        }
+        
+        /* --- Layout Principal --- */
+        #game-wrapper {
+            display: flex; gap: 20px;
+        }
+
+        #game-container { 
+            position: relative; width: 480px; height: 480px; background: #7cb342; 
+            border: 12px solid #e0e0e0; border-radius: 8px; overflow: hidden; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* Painel Lateral (Status do Jogador) */
+        #side-panel {
+            width: 220px; background: #eee; border: 12px solid #e0e0e0; 
+            border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        .side-title { font-size: 12px; text-align: center; border-bottom: 4px solid #333; padding-bottom: 10px; line-height: 1.4;}
+        .side-stat { font-size: 10px; line-height: 1.8; }
+        .exp-bar { height: 8px; background: #ccc; border: 2px solid #333; margin-top: 5px; border-radius: 4px; overflow: hidden;}
+        .exp-fill { height: 100%; background: #9b59b6; width: 0%; transition: width 0.3s; }
+
+        /* --- Mundo (Mapa) --- */
+        .tile { position: absolute; width: 48px; height: 48px; }
+        
+        .high-grass { 
+            background: repeating-linear-gradient(45deg, #558b2f, #558b2f 6px, #689f38 6px, #689f38 12px); 
+            border: 2px solid #33691e; opacity: 0.9;
+        }
+        
+        .tree {
+            background: #3e2723;
+            border-radius: 10px 10px 4px 4px;
+            border: 4px solid #1b0000;
+            box-shadow: inset 0px 15px 0px #2e7d32; /* Copa da árvore */
+        }
+
+        #player { 
+            position: absolute; width: 40px; height: 40px; background: #e74c3c; 
+            border: 4px solid #fff; box-shadow: inset -4px -4px 0px rgba(0,0,0,0.2), 0 4px 0 #000;
+            z-index: 10; transition: top 0.15s linear, left 0.15s linear; border-radius: 4px;
+            margin: 4px; /* Centraliza no tile de 48px */
+        }
+
+        /* --- Tela de Batalha --- */
+        #battle-screen { 
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: linear-gradient(to bottom, #87CEEB 50%, #dcdde1 50%); z-index: 100; flex-direction: column;
+        }
+
+        /* Status dos Monstros na Batalha */
+        .status-box { 
+            position: absolute; background: #fff; border: 4px solid #333; 
+            padding: 10px; border-radius: 8px; width: 220px; box-shadow: 4px 4px 0 rgba(0,0,0,0.1);
+        }
+        #enemy-status { top: 20px; left: 20px; }
+        #player-status { bottom: 160px; right: 20px; }
+        
+        .name { font-size: 12px; margin-bottom: 8px; text-transform: uppercase; }
+        .hp-bar-bg { width: 100%; height: 12px; background: #555; border: 2px solid #333; border-radius: 4px; overflow: hidden; }
+        .hp-fill { height: 100%; background: #2ecc71; width: 100%; transition: width 0.4s ease-out, background-color 0.3s; }
+        .hp-text { font-size: 10px; text-align: right; margin-top: 5px; }
+
+        /* Sprites (Monstros) */
+        .sprite { 
+            position: absolute; width: 80px; height: 80px; border: 4px solid #000; 
+            box-shadow: inset -8px -8px 0px rgba(0,0,0,0.2), 4px 4px 0 rgba(0,0,0,0.3); 
+            border-radius: 8px; transition: opacity 0.2s;
+        }
+        #enemy-sprite { top: 50px; right: 40px; background: #ccc; }
+        #player-sprite { bottom: 190px; left: 40px; background: #3498db; }
+
+        /* Interface Inferior (Textos e Botões) */
+        #bottom-panel { 
+            position: absolute; bottom: 0; width: 100%; height: 140px; 
+            background: #fff; border-top: 6px solid #333; display: flex;
+        }
+        #dialogue-box { 
+            flex: 1; padding: 20px; font-size: 12px; line-height: 1.8; 
+            border-right: 6px solid #333; display: flex; align-items: center;
+        }
+        
+        /* Menus */
+        .menu { display: none; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; width: 220px; }
+        button { 
+            background: #fff; border: none; border-right: 2px solid #ddd; border-bottom: 2px solid #ddd;
+            font-family: inherit; font-size: 10px; cursor: pointer; text-transform: uppercase;
+            transition: background 0.1s;
+        }
+        button:hover { background: #f1c40f; color: #000; }
+        button:active { background: #f39c12; }
+        button:disabled { background: #eee; color: #aaa; cursor: not-allowed; }
+        .back-btn { background: #ffcccc; }
+        .back-btn:hover { background: #ff9999; }
+
+        /* --- Animações --- */
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            50% { transform: translateX(8px); }
+            75% { transform: translateX(-8px); }
+            100% { transform: translateX(0); }
+        }
+        .damage-anim { animation: shake 0.3s; }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .capture-anim { animation: blink 0.2s 5; }
+
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="side-panel">
+        <div class="side-title">TREINADOR</div>
+        <div class="side-stat">Nível: <span id="ui-level">1</span></div>
+        <div class="side-stat">Vida: <span id="ui-hp">100/100</span></div>
+        <div class="side-stat">
+            EXP: <span id="ui-exp-text">0/50</span>
+            <div class="exp-bar"><div id="ui-exp-fill" class="exp-fill"></div></div>
+        </div>
+        <div class="side-title" style="margin-top: 10px;">MOCHILA</div>
+        <div class="side-stat">💊 Poções: <span id="ui-potions">5</span></div>
+        <div class="side-stat">🔴 Cápsulas: <span id="ui-capsules">5</span></div>
+        
+        <div class="side-stat" style="margin-top:auto; font-size:8px; color:#666; text-align:center;">
+            SETAS para andar.<br>Ande na grama alta para achar monstros!
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div id="player"></div>
+        
+        <div id="battle-screen">
+            
+            <div id="enemy-status" class="status-box">
+                <div id="enemy-name" class="name">Monstro</div>
+                <div class="hp-bar-bg"><div id="enemy-hp-fill" class="hp-fill"></div></div>
+            </div>
+            <div id="enemy-sprite" class="sprite"></div>
+
+            <div id="player-status" class="status-box">
+                <div class="name">Você</div>
+                <div class="hp-bar-bg"><div id="player-hp-fill" class="hp-fill"></div></div>
+                <div id="player-hp-text" class="hp-text">100/100</div>
+            </div>
+            <div id="player-sprite" class="sprite"></div>
+
+            <div id="bottom-panel">
+                <div id="dialogue-box">Um monstro selvagem apareceu!</div>
+                
+                <div id="action-menu" class="menu">
+                    <button onclick="showAttacks()">Atacar</button>
+                    <button onclick="capture()">Capturar</button>
+                    <button onclick="heal()">Poção</button>
+                    <button onclick="run()">Fugir</button>
+                </div>
+
+                <div id="attack-menu" class="menu">
+                    <button onclick="executeTurn('fogo', '#e74c3c')">Fogo</button>
+                    <button onclick="executeTurn('agua', '#3498db')">Água</button>
+                    <button onclick="executeTurn('planta', '#2ecc71')">Planta</button>
+                    <button class="back-btn" onclick="backToActionMenu()">Voltar</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---- Configurações e Dados ----
+    const TILE_SIZE = 48;
+    const GRID_SIZE = 10;
+    
+    // Posição no Grid (0 a 9)
+    let playerPos = { x: 5, y: 5 };
+    
+    // Status do Jogador
+    const playerStats = { 
+        level: 1, 
+        hp: 100, 
+        maxHp: 100,
+        exp: 0,
+        expToNext: 50,
+        potions: 5,
+        capsules: 5
+    };
+
+    let enemy = null;
+    let inBattle = false;
+    let isActionLocked = false;
+
+    // Elementos e Vantagens
+    const types = {
+        fogo: { forte: 'planta', fraco: 'agua', nome: 'Ataque de Fogo' },
+        agua: { forte: 'fogo', fraco: 'planta', nome: 'Ataque de Água' },
+        planta: { forte: 'agua', fraco: 'fogo', nome: 'Ataque de Planta' }
+    };
+
+    const monsters = [
+        { name: "Brasa", type: "fogo", color: "#e74c3c" },
+        { name: "Gota", type: "agua", color: "#3498db" },
+        { name: "Broto", type: "planta", color: "#2ecc71" },
+        { name: "Faisca", type: "fogo", color: "#f39c12" },
+        { name: "Lodo", type: "agua", color: "#1abc9c" }
+    ];
+
+    // ---- Geração do Mapa (Grid 10x10) ----
+    // 0 = Chão Limpo, 1 = Grama Alta (Encontros), 2 = Árvore (Colisão)
+    const mapGrid = [];
+    const container = document.getElementById('game-container');
+
+    function initMap() {
+        for (let y = 0; y < GRID_SIZE; y++) {
+            let row = [];
+            for (let x = 0; x < GRID_SIZE; x++) {
+                // Deixa o centro livre para o spawn do jogador
+                if (x >= 4 && x <= 6 && y >= 4 && y <= 6) {
+                    row.push(0);
+                    continue;
+                }
+                
+                let rand = Math.random();
+                let type = 0;
+                
+                if (rand < 0.15) type = 2; // 15% de chance de Árvore
+                else if (rand < 0.5) type = 1; // 35% de chance de Grama Alta
+                
+                row.push(type);
+
+                // Renderiza no DOM se não for chão limpo
+                if (type > 0) {
+                    let tile = document.createElement('div');
+                    tile.className = type === 1 ? 'tile high-grass' : 'tile tree';
+                    tile.style.left = (x * TILE_SIZE) + 'px';
+                    tile.style.top = (y * TILE_SIZE) + 'px';
+                    container.appendChild(tile);
+                }
+            }
+            mapGrid.push(row);
+        }
+        updatePlayerPosition();
+    }
+
+    // ---- Movimentação ----
+    window.addEventListener('keydown', (e) => {
+        if(inBattle) return;
+        
+        let newX = playerPos.x;
+        let newY = playerPos.y;
+
+        if(e.key === 'ArrowUp') newY--;
+        if(e.key === 'ArrowDown') newY++;
+        if(e.key === 'ArrowLeft') newX--;
+        if(e.key === 'ArrowRight') newX++;
+
+        // Verifica Limites do Mapa e Colisão com Árvores (tipo 2)
+        if (newX >= 0 && newX < GRID_SIZE && newY >= 0 && newY < GRID_SIZE) {
+            if (mapGrid[newY][newX] !== 2) { 
+                playerPos.x = newX;
+                playerPos.y = newY;
+                updatePlayerPosition();
+                
+                // Só tem encontro se pisar na Grama Alta (tipo 1)
+                if (mapGrid[newY][newX] === 1) {
+                    checkEncounter();
+                }
+            }
+        }
+    });
+
+    function updatePlayerPosition() {
+        let pElem = document.getElementById('player');
+        pElem.style.left = (playerPos.x * TILE_SIZE) + 'px';
+        pElem.style.top = (playerPos.y * TILE_SIZE) + 'px';
+    }
+
+    function checkEncounter() {
+        if(Math.random() < 0.20) { // 20% chance ao andar na grama alta
+            setTimeout(startBattle, 200);
+        }
+    }
+
+    // ---- Funções de UI ----
+    function updateUI() {
+        document.getElementById('ui-level').innerText = playerStats.level;
+        document.getElementById('ui-hp').innerText = `${playerStats.hp}/${playerStats.maxHp}`;
+        document.getElementById('ui-exp-text').innerText = `${playerStats.exp}/${playerStats.expToNext}`;
+        document.getElementById('ui-potions').innerText = playerStats.potions;
+        document.getElementById('ui-capsules').innerText = playerStats.capsules;
+        
+        let expPct = (playerStats.exp / playerStats.expToNext) * 100;
+        document.getElementById('ui-exp-fill').style.width = expPct + "%";
+    }
+
+    function setDialogue(text) {
+        document.getElementById('dialogue-box').innerText = text;
+    }
+
+    function toggleActionMenu(show) {
+        document.getElementById('action-menu').style.display = show ? 'grid' : 'none';
+    }
+
+    function toggleAttackMenu(show) {
+        document.getElementById('attack-menu').style.display = show ? 'grid' : 'none';
+    }
+
+    function backToActionMenu() {
+        if (isActionLocked) return;
+        toggleAttackMenu(false);
+        toggleActionMenu(true);
+    }
+
+    function updateBars() {
+        let enemyPct = Math.max((enemy.hp / enemy.maxHp) * 100, 0);
+        let playerPct = Math.max((playerStats.hp / playerStats.maxHp) * 100, 0);
+        
+        let enemyFill = document.getElementById('enemy-hp-fill');
+        enemyFill.style.width = enemyPct + "%";
+        enemyFill.style.backgroundColor = enemyPct < 30 ? "#e74c3c" : enemyPct < 60 ? "#f1c40f" : "#2ecc71";
+
+        let playerFill = document.getElementById('player-hp-fill');
+        playerFill.style.width = playerPct + "%";
+        playerFill.style.backgroundColor = playerPct < 30 ? "#e74c3c" : playerPct < 60 ? "#f1c40f" : "#2ecc71";
+        
+        document.getElementById('player-hp-text').innerText = `${Math.max(playerStats.hp, 0)}/${playerStats.maxHp}`;
+        updateUI();
+    }
+
+    function shakeSprite(spriteId) {
+        const el = document.getElementById(spriteId);
+        el.classList.remove('damage-anim');
+        void el.offsetWidth;
+        el.classList.add('damage-anim');
+    }
+
+    // ---- Lógica de Batalha ----
+    function startBattle() {
+        inBattle = true;
+        isActionLocked = true;
+
+        let levelOffset = Math.floor(Math.random() * 3) - 1; // -1 a +1
+        let enemyLevel = Math.max(1, playerStats.level + levelOffset);
+
+        enemy = {
+            ...monsters[Math.floor(Math.random() * monsters.length)],
+            level: enemyLevel,
+            maxHp: 50 + (enemyLevel * 15),
+        };
+        enemy.hp = enemy.maxHp;
+
+        document.getElementById('enemy-name').innerText = `Lv${enemy.level} ${enemy.name}`;
+        document.getElementById('enemy-sprite').style.background = enemy.color;
+        document.getElementById('battle-screen').style.display = 'flex';
+        
+        updateBars();
+        toggleActionMenu(false);
+        toggleAttackMenu(false);
+
+        setDialogue(`Um ${enemy.name} selvagem apareceu!`);
+
+        setTimeout(() => {
+            setDialogue("O que você vai fazer?");
+            toggleActionMenu(true);
+            isActionLocked = false;
+        }, 1500);
+    }
+
+    function showAttacks() {
+        if (isActionLocked) return;
+        toggleActionMenu(false);
+        toggleAttackMenu(true);
+    }
+
+    function heal() {
+        if (isActionLocked) return;
+        
+        if (playerStats.potions <= 0) {
+            setDialogue("Você não tem mais Poções!");
+            return;
+        }
+
+        isActionLocked = true;
+        toggleActionMenu(false);
+        playerStats.potions--;
+
+        let healAmount = Math.floor(playerStats.maxHp * 0.4); // Cura 40%
+        playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + healAmount);
+        
+        setDialogue(`Você usou uma Poção! Curou ${healAmount} PV.`);
+        updateBars();
+
+        setTimeout(enemyTurn, 2000);
+    }
+
+    function capture() {
+        if (isActionLocked) return;
+        
+        if (playerStats.capsules <= 0) {
+            setDialogue("Você não tem mais Cápsulas!");
+            return;
+        }
+
+        isActionLocked = true;
+        toggleActionMenu(false);
+        playerStats.capsules--;
+        updateUI();
+
+        setDialogue("Você lançou uma Cápsula de Captura!");
+        
+        const el = document.getElementById('enemy-sprite');
+        el.classList.add('capture-anim');
+
+        setTimeout(() => {
+            el.classList.remove('capture-anim');
+            
+            let hpPercent = enemy.hp / enemy.maxHp;
+            let captureChance = 0.25 + (0.6 * (1 - hpPercent));
+
+            if (Math.random() < captureChance) {
+                setDialogue(`Sucesso! Você capturou o ${enemy.name}! (+1 Poção encontrada)`);
+                playerStats.potions++; // Recompensa extra por capturar
+                updateUI();
+                
+                setTimeout(() => {
+                    let expBonus = enemy.level * 15;
+                    gainExp(expBonus);
+                    setTimeout(endBattle, 2000);
+                }, 2000);
+            } else {
+                setDialogue(`Oh não! O ${enemy.name} escapou da cápsula!`);
+                setTimeout(enemyTurn, 2000);
+            }
+        }, 1000);
+    }
+
+    function run() {
+        if (isActionLocked) return;
+        isActionLocked = true;
+        toggleActionMenu(false);
+
+        if (Math.random() > 0.3) {
+            setDialogue("Você fugiu em segurança!");
+            setTimeout(endBattle, 1500);
+        } else {
+            setDialogue("Não conseguiu fugir!");
+            setTimeout(enemyTurn, 1500);
+        }
+    }
+
+    function executeTurn(attackType, colorEffect) {
+        if (isActionLocked) return;
+        isActionLocked = true;
+        toggleAttackMenu(false);
+
+        // Muda a cor do jogador rapidamente para simular o elemento do ataque
+        let pSprite = document.getElementById('player-sprite');
+        let originalColor = pSprite.style.background;
+        pSprite.style.background = colorEffect;
+
+        setDialogue(`Você usou ${types[attackType].nome}!`);
+
+        setTimeout(() => {
+            pSprite.style.background = originalColor; // Restaura a cor
+            
+            let baseDamage = 12 + (playerStats.level * 5);
+            let multiplier = 1;
+            let msg = "";
+
+            if (types[attackType].forte === enemy.type) {
+                multiplier = 2;
+                msg = "Foi super efetivo!";
+            } else if (types[attackType].fraco === enemy.type) {
+                multiplier = 0.5;
+                msg = "Não é muito efetivo...";
+            }
+
+            // Variação de dano (+/- 10%)
+            let variance = (Math.random() * 0.2) + 0.9; 
+            let damage = Math.floor(baseDamage * multiplier * variance);
+            
+            enemy.hp -= damage;
+            shakeSprite('enemy-sprite');
+            updateBars();
+
+            if (msg) {
+                setTimeout(() => setDialogue(msg), 800);
+            }
+
+            setTimeout(() => {
+                if (enemy.hp <= 0) {
+                    winBattle();
+                } else {
+                    enemyTurn();
+                }
+            }, msg ? 2000 : 1200);
+
+        }, 800);
+    }
+
+    function enemyTurn() {
+        setDialogue(`${enemy.name} atacou!`);
+
+        setTimeout(() => {
+            let enemyDamage = 8 + (enemy.level * 3);
+            let variance = (Math.random() * 0.2) + 0.9;
+            let damage = Math.floor(enemyDamage * variance);
+            
+            playerStats.hp -= damage;
+            shakeSprite('player-sprite');
+            updateBars();
+
+            setTimeout(() => {
+                if (playerStats.hp <= 0) {
+                    loseBattle();
+                } else {
+                    setDialogue("O que você vai fazer?");
+                    toggleActionMenu(true);
+                    isActionLocked = false;
+                }
+            }, 1200);
+        }, 1200);
+    }
+
+    function gainExp(amount) {
+        playerStats.exp += amount;
+        
+        if (playerStats.exp >= playerStats.expToNext) {
+            playerStats.level++;
+            playerStats.exp -= playerStats.expToNext;
+            playerStats.expToNext = Math.floor(playerStats.expToNext * 1.5);
+            playerStats.maxHp += 15;
+            playerStats.hp = playerStats.maxHp;
+            playerStats.capsules += 2; // Ganha itens ao upar
+            
+            setDialogue(`Você subiu para o Nível ${playerStats.level}! Ganhou +2 Cápsulas!`);
+        } else {
+            setDialogue(`Você ganhou ${amount} EXP!`);
+        }
+        updateUI();
+    }
+
+    function winBattle() {
+        setDialogue(`${enemy.name} desmaiou!`);
+        setTimeout(() => {
+            let expGained = enemy.level * 10;
+            gainExp(expGained);
+            setTimeout(endBattle, 2500);
+        }, 1500);
+    }
+
+    function loseBattle() {
+        setDialogue("Você perdeu... Acordando curado em um local seguro.");
+        setTimeout(() => {
+            playerStats.hp = playerStats.maxHp;
+            updateBars();
+            endBattle();
+        }, 2500);
+    }
+
+    function endBattle() {
+        document.getElementById('battle-screen').style.display = 'none';
+        inBattle = false;
+        isActionLocked = false;
+    }
+
+    // Inicialização
+    initMap();
+    updateUI();
+
+</script>
+</body>
+</html>
