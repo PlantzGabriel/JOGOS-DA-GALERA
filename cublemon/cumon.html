@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Monster Masters - Pro Edition</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        :root {
+            --bg-dark: #121212;
+            --panel-bg: #1e1e24;
+            --primary: #f1c40f;
+            --border-color: #2c3e50;
+            --text-light: #ecf0f1;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body { 
+            background: var(--bg-dark); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            font-family: 'Press Start 2P', cursive; 
+            color: var(--text-light);
+            overflow: hidden;
+            background-image: radial-gradient(circle at center, #2a2a35 0%, #121212 100%);
+        }
+
+        /* --- Overlays --- */
+        .overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(4px);
+            z-index: 1000; display: flex; flex-direction: column; 
+            justify-content: center; align-items: center;
+        }
+        
+        .overlay h2 {
+            color: var(--primary);
+            text-shadow: 2px 2px 0px #000;
+            margin-bottom: 30px;
+        }
+
+        .card { 
+            background: #2b2b36; border: 3px solid #444; padding: 20px; 
+            cursor: pointer; text-align: center; margin: 10px; 
+            font-size: 10px; width: 180px; border-radius: 8px;
+            transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+            line-height: 1.8;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .card:hover { 
+            border-color: var(--primary); color: var(--primary); 
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(241, 196, 15, 0.2);
+        }
+
+        /* --- Viewport e Mundo --- */
+        #game-wrapper {
+            display: flex;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #game-container { 
+            position: relative; width: 600px; height: 500px; 
+            background: #000; overflow: hidden; 
+        }
+        
+        #world { 
+            position: absolute; width: 2000px; height: 2000px; 
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"><rect width="50" height="50" fill="%2345a049" stroke="%233d8b40" stroke-width="1"/></svg>'); 
+            transition: transform 0.15s linear; 
+        }
+        
+        #interior { 
+            position: absolute; width: 600px; height: 500px; 
+            background: #5d4037; display: none; z-index: 10; 
+            background-image: repeating-linear-gradient(45deg, #4e342e 25%, transparent 25%, transparent 75%, #4e342e 75%, #4e342e), repeating-linear-gradient(45deg, #4e342e 25%, #5d4037 25%, #5d4037 75%, #4e342e 75%, #4e342e);
+            background-position: 0 0, 25px 25px;
+            background-size: 50px 50px;
+        }
+
+        #player { 
+            position: absolute; width: 40px; height: 40px; background: var(--primary); 
+            border: 3px solid #fff; z-index: 100; border-radius: 8px; 
+            transition: top 0.15s linear, left 0.15s linear;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        }
+
+        .house { position: absolute; width: 160px; height: 140px; background: #795548; top: 900px; left: 920px; border: 6px solid #3e2723; border-radius: 4px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .house::after { content: "GYM"; position: absolute; top: 10px; width: 100%; text-align: center; color: #fff; font-size: 12px; }
+        .door { position: absolute; bottom: 0; left: 65px; width: 30px; height: 20px; background: #212121; border-top-left-radius: 5px; border-top-right-radius: 5px; }
+        .rival-npc { position: absolute; width: 40px; height: 40px; background: #e74c3c; top: 100px; left: 280px; border: 3px solid #000; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+
+        /* --- Battle Scene --- */
+        #battle-screen { 
+            position: absolute; inset: 0; z-index: 500; display: none; 
+            background: linear-gradient(to bottom, #74b9ff, #81ecec); flex-direction: column; 
+        }
+        
+        .ui-box { 
+            position: absolute; background: rgba(255, 255, 255, 0.95); 
+            border: 4px solid #2d3436; padding: 12px; border-radius: 8px; 
+            color: #2d3436; width: 250px;
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
+        }
+        #en-ui { top: 30px; left: 30px; }
+        #pl-ui { bottom: 180px; right: 30px; }
+        
+        .name-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 10px; }
+        
+        .hp-bar { height: 14px; background: #dfe6e9; border: 2px solid #2d3436; border-radius: 4px; overflow: hidden; }
+        .hp-fill { height: 100%; background: #00b894; width: 100%; transition: width 0.4s ease, background-color 0.4s ease; }
+
+        .sprite { 
+            position: absolute; width: 130px; height: 130px; border-radius: 50%; 
+            border: 6px solid rgba(0,0,0,0.15);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3), 0 10px 20px rgba(0,0,0,0.2);
+            animation: float 3s ease-in-out infinite;
+        }
+        #en-sprite { top: 50px; right: 70px; animation-delay: -1.5s; }
+        #pl-sprite { bottom: 210px; left: 70px; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        /* --- Controls & Dialogue --- */
+        #controls { 
+            position: absolute; bottom: 0; width: 100%; height: 150px; 
+            background: var(--panel-bg); display: flex; 
+            border-top: 4px solid var(--border-color); 
+        }
+        #msg { 
+            flex: 1; padding: 25px; font-size: 12px; line-height: 1.8; 
+            border-right: 4px solid var(--border-color);
+        }
+        .btns { display: grid; grid-template-columns: 1fr 1fr; width: 300px; gap: 2px; padding: 2px; background: var(--border-color); }
+        
+        button { 
+            background: #2b2b36; color: #fff; border: none; 
+            font-family: inherit; font-size: 10px; cursor: pointer; 
+            transition: background 0.1s, transform 0.1s;
+        }
+        button:hover:not(:disabled) { background: #3f3f4e; }
+        button:active:not(:disabled) { transform: scale(0.95); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- Side Panel --- */
+        #side { 
+            width: 220px; padding: 20px; background: var(--panel-bg); 
+            border-left: 4px solid var(--border-color); font-size: 9px; 
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .menu-btn { 
+            background: var(--primary); color: #000; padding: 15px; 
+            border-radius: 4px; width: 100%; font-weight: bold;
+            box-shadow: 0 4px 0px #b8950b; margin-bottom: 5px;
+        }
+        .menu-btn:active { transform: translateY(4px); box-shadow: 0 0px 0px #b8950b; }
+
+        .mini-card {
+            background: #2b2b36; padding: 10px; border-radius: 4px;
+            border-left: 4px solid var(--primary); margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* Animações de Dano */
+        .flash-red { animation: flashR 0.3s; }
+        @keyframes flashR { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(0.5) sepia(1) hue-rotate(-50deg) saturate(5); } }
+        
+        .shake { animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 
+            0%, 100% { transform: translateX(0); } 
+            25% { transform: translateX(-8px) rotate(-5deg); } 
+            75% { transform: translateX(8px) rotate(5deg); } 
+        }
+    </style>
+</head>
+<body>
+
+<div id="start-overlay" class="overlay">
+    <h2>ESCOLHA SEU MONSTRO</h2>
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; max-width: 800px;" id="starter-list"></div>
+</div>
+
+<div id="team-overlay" class="overlay" style="display: none;">
+    <h2>SUA EQUIPE</h2>
+    <div id="full-team-list" style="display: flex; flex-wrap: wrap; justify-content: center; max-width: 700px;"></div>
+    <button class="menu-btn" style="width: 200px; margin-top: 30px;" onclick="toggleTeamMenu()">FECHAR</button>
+</div>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="world">
+            <div class="house"><div class="door"></div></div>
+            <div id="player" style="top:1000px; left:1000px;"></div>
+        </div>
+        <div id="interior">
+            <div class="rival-npc"></div>
+        </div>
+
+        <div id="battle-screen">
+            <div id="en-ui" class="ui-box">
+                <div class="name-row">
+                    <span id="en-name">NOME</span>
+                    <span id="en-lvl">LV 5</span>
+                </div>
+                <div class="hp-bar"><div id="en-hp" class="hp-fill"></div></div>
+            </div>
+            <div id="en-sprite" class="sprite"></div>
+
+            <div id="pl-ui" class="ui-box">
+                <div class="name-row">
+                    <span id="pl-name">NOME</span>
+                    <span id="pl-lvl">LV 5</span>
+                </div>
+                <div class="hp-bar"><div id="pl-hp" class="hp-fill"></div></div>
+                <div id="pl-hp-val" style="font-size: 9px; text-align: right; margin-top: 5px; font-weight: bold;"></div>
+            </div>
+            <div id="pl-sprite" class="sprite"></div>
+
+            <div id="controls">
+                <div id="msg">O que você vai fazer?</div>
+                <div class="btns" id="btn-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="side">
+        <button class="menu-btn" onclick="toggleTeamMenu()">MOCHILA (M)</button>
+        <div style="text-align: center; color: #888; font-size: 8px; margin-top: -5px; margin-bottom: 10px;">Setas para mover</div>
+        <div id="mini-team"></div>
+    </div>
+</div>
+
+<script>
+    const TYPES = {
+        fogo: { color: '#ff4757', forte: ['planta', 'lutador'], fraco: ['agua', 'pedra'] },
+        agua: { color: '#0984e3', forte: ['fogo', 'pedra'], fraco: ['planta', 'lutador'] },
+        planta: { color: '#00b894', forte: ['agua', 'pedra'], fraco: ['voador', 'fogo'] },
+        pedra: { color: '#636e72', forte: ['voador', 'fogo'], fraco: ['planta', 'agua'] },
+        voador: { color: '#74b9ff', forte: ['lutador', 'planta'], fraco: ['pedra', 'fogo'] },
+        lutador: { color: '#e17055', forte: ['agua', 'planta'], fraco: ['voador', 'fogo'] }
+    };
+
+    const SPECIES = [
+        { name: "Brasinha", type: "fogo", sName: "Rugido", sEff: "oppAtk-", eleAtk: "Chama" },
+        { name: "Gotinha", type: "agua", sName: "Acuar", sEff: "oppDef-", eleAtk: "Jato" },
+        { name: "Folhinha", type: "planta", sName: "Crescer", sEff: "selfAtk+", eleAtk: "Folha" },
+        { name: "Pedrinha", type: "pedra", sName: "Muro", sEff: "selfDef+", eleAtk: "Tumba" },
+        { name: "Peninha", type: "voador", sName: "Vento", sEff: "oppAtk-", eleAtk: "Asa" },
+        { name: "Lutinha", type: "lutador", sName: "Foco", sEff: "selfAtk+", eleAtk: "Soco" }
+    ];
+
+    let party = [];
+    let activeIdx = 0;
+    let enemy = null;
+    let pos = { x: 1000, y: 1000, in: false };
+    let lock = false;
+    let typeWriterTimeout;
+
+    // --- Inicialização ---
+    function init() {
+        const list = document.getElementById('starter-list');
+        SPECIES.forEach(s => {
+            list.innerHTML += `<div class="card" onclick="escolher('${s.name}')">
+                <strong style="color:${TYPES[s.type].color}; font-size:12px">${s.name}</strong><br><br>
+                Tipo: ${s.type.toUpperCase()}<br><br>
+                HP: 75 | ATK: 20
+            </div>`;
+        });
+        resetMenu();
+    }
+
+    function escolher(name) {
+        party.push(gerarMonstro(name, 5));
+        document.getElementById('start-overlay').style.display = 'none';
+        atualizarInterface();
+        render();
+    }
+
+    function gerarMonstro(name, lvl) {
+        let s = SPECIES.find(x => x.name === name) || SPECIES[0];
+        return { ...s, lvl, hp: 50+(lvl*5), maxHp: 50+(lvl*5), atk: 10+(lvl*2), def: 10+lvl, mAtk: 1, mDef: 1 };
+    }
+
+    // --- Movimentação ---
+    window.addEventListener('keydown', e => {
+        if(lock || party.length === 0) return;
+        if(e.key.toLowerCase() === 'm') toggleTeamMenu();
+        if(document.getElementById('battle-screen').style.display === 'flex') return;
+
+        let moved = false;
+        if(e.key === 'ArrowUp') { pos.y -= 50; moved = true; }
+        if(e.key === 'ArrowDown') { pos.y += 50; moved = true; }
+        if(e.key === 'ArrowLeft') { pos.x -= 50; moved = true; }
+        if(e.key === 'ArrowRight') { pos.x += 50; moved = true; }
+
+        pos.x = Math.max(0, Math.min(1950, pos.x));
+        pos.y = Math.max(0, Math.min(1950, pos.y));
+
+        if(moved) {
+            if(!pos.in) {
+                if(pos.y === 950 && pos.x >= 900 && pos.x <= 1050) entrarCasa();
+                else if(Math.random() < 0.10) iniciarBatalha(false);
+            } else {
+                if(pos.y > 450) sairCasa();
+                else if(pos.y < 150 && pos.x === 250) iniciarBatalha(true);
+            }
+            render();
+        }
+    });
+
+    function entrarCasa() { pos.in = true; pos.x = 250; pos.y = 400; document.getElementById('interior').style.display = 'block'; }
+    function sairCasa() { pos.in = false; pos.x = 950; pos.y = 1000; document.getElementById('interior').style.display = 'none'; }
+    function render() {
+        const p = document.getElementById('player');
+        p.style.left = pos.x + 'px'; p.style.top = pos.y + 'px';
+        if(!pos.in) document.getElementById('world').style.transform = `translate(${280-pos.x}px, ${230-pos.y}px)`;
+    }
+
+    // --- Batalha ---
+    function iniciarBatalha(isBoss) {
+        lock = true;
+        if(isBoss) {
+            enemy = gerarMonstro("Lutinha", 7);
+            escrever("O LÍDER DE GINÁSIO desafia você!");
+        } else {
+            let s = SPECIES[Math.floor(Math.random()*SPECIES.length)];
+            enemy = gerarMonstro(s.name, Math.floor(Math.random() * 3) + 3);
+            escrever(`Um ${enemy.name} selvagem apareceu!`);
+        }
+        
+        // Corrige o bug de iniciar batalha com monstro morto
+        if(party[activeIdx].hp <= 0) {
+            activeIdx = party.findIndex(m => m.hp > 0);
+        }
+
+        document.getElementById('battle-screen').style.display = 'flex';
+        resetMods();
+        sync();
+        
+        setTimeout(() => { lock = false; }, 1500);
+    }
+
+    function atualizarBarraHp(id, atual, max) {
+        const perc = Math.max(0, (atual/max)*100);
+        const el = document.getElementById(id);
+        el.style.width = perc + "%";
+        
+        if(perc > 50) el.style.backgroundColor = "#00b894";
+        else if(perc > 20) el.style.backgroundColor = "#fdcb6e";
+        else el.style.backgroundColor = "#d63031";
+    }
+
+    function sync() {
+        let p = party[activeIdx];
+        document.getElementById('pl-name').innerText = p.name;
+        document.getElementById('pl-lvl').innerText = `LV ${p.lvl}`;
+        atualizarBarraHp('pl-hp', p.hp, p.maxHp);
+        document.getElementById('pl-hp-val').innerText = `${p.hp}/${p.maxHp}`;
+        document.getElementById('pl-sprite').style.background = `radial-gradient(circle at 30% 30%, ${TYPES[p.type].color}, #000)`;
+
+        document.getElementById('en-name').innerText = enemy.name;
+        document.getElementById('en-lvl').innerText = `LV ${enemy.lvl}`;
+        atualizarBarraHp('en-hp', enemy.hp, enemy.maxHp);
+        document.getElementById('en-sprite').style.background = `radial-gradient(circle at 30% 30%, ${TYPES[enemy.type].color}, #000)`;
+        
+        atualizarInterface();
+    }
+
+    function escrever(txt) { 
+        clearTimeout(typeWriterTimeout);
+        const msgEl = document.getElementById('msg');
+        msgEl.innerText = "";
+        let i = 0;
+        function type() {
+            if(i < txt.length) {
+                msgEl.innerText += txt.charAt(i);
+                i++;
+                typeWriterTimeout = setTimeout(type, 20);
+            }
+        }
+        type();
+    }
+
+    // --- Menu de Ataque ---
+    function menuAtk() {
+        if(lock) return;
+        let p = party[activeIdx];
+        document.getElementById('btn-container').innerHTML = `
+            <button onclick="ataque('norm')">Investida</button>
+            <button onclick="ataque('ele')">${p.eleAtk}</button>
+            <button onclick="ataque('stat')">${p.sName}</button>
+            <button onclick="resetMenu()">VOLTAR</button>
+        `;
+    }
+
+    async function ataque(tipo) {
+        if(lock) return; lock = true;
+        let p = party[activeIdx];
+        let dmg = 0;
+        let txt = "";
+
+        // Lógica de Esquiva (5%)
+        if(Math.random() < 0.05) {
+            escrever(`O ataque falhou! ${enemy.name} desviou.`);
+            await esperar(2000);
+            turnoInimigo(); return;
+        }
+
+        if(tipo === 'norm') {
+            dmg = p.atk * p.mAtk;
+            txt = `${p.name} usou Investida!`;
+        } else if(tipo === 'ele') {
+            let mult = 1;
+            if(TYPES[p.type].forte.includes(enemy.type)) { mult = 2; txt = "É SUPER EFETIVO! "; }
+            if(TYPES[p.type].fraco.includes(enemy.type)) { mult = 0.5; txt = "Não é muito efetivo... "; }
+            dmg = (p.atk * 1.3 * p.mAtk) * mult;
+            txt += `${p.name} usou ${p.eleAtk}!`;
+        } else {
+            processarStatus(p.sEff, p, enemy);
+            txt = `${p.name} usou ${p.sName}!`;
+        }
+
+        // Lógica de Crítico (10%)
+        if(tipo !== 'stat' && Math.random() < 0.10) {
+            dmg *= 1.5;
+            txt = "ACERTO CRÍTICO! " + txt;
+        }
+
+        enemy.hp = Math.max(0, enemy.hp - Math.floor(dmg));
+        escrever(txt);
+        animarHit('en-sprite');
+        sync();
+        await esperar(2000);
+
+        if(enemy.hp <= 0) vitoria(); else turnoInimigo();
+    }
+
+    async function turnoInimigo() {
+        let p = party[activeIdx];
+        if(Math.random() < 0.05) { escrever(`${p.name} esquivou do golpe com agilidade!`); await esperar(2000); finalizarTurno(); return; }
+
+        let dmg = enemy.atk * enemy.mAtk;
+        p.hp = Math.max(0, p.hp - Math.floor(dmg));
+        escrever(`${enemy.name} revidou com força!`);
+        animarHit('pl-sprite');
+        sync();
+        await esperar(2000);
+
+        if(p.hp <= 0) {
+            escrever(`${p.name} desmaiou!`);
+            await esperar(2000);
+            if(party.every(m => m.hp <= 0)) { 
+                alert("Você perdeu todos os seus monstros... Fim de jogo!"); 
+                location.reload(); 
+            } else {
+                menuTroca(true);
+            }
+        } else {
+            finalizarTurno();
+        }
+    }
+
+    function processarStatus(eff, self, opp) {
+        if(eff === "oppAtk-") { opp.mAtk *= 0.8; escrever(`O ataque de ${opp.name} caiu!`); }
+        if(eff === "oppDef-") { opp.mDef *= 0.8; escrever(`A defesa de ${opp.name} caiu!`); }
+        if(eff === "selfAtk+") { self.mAtk *= 1.2; escrever(`O ataque de ${self.name} subiu!`); }
+        if(eff === "selfDef+") { self.mDef *= 1.2; escrever(`A defesa de ${self.name} subiu!`); }
+    }
+
+    function finalizarTurno() { lock = false; resetMenu(); escrever("O que você vai fazer?"); }
+    
+    function resetMenu() {
+        document.getElementById('btn-container').innerHTML = `
+            <button onclick="menuAtk()">LUTAR</button>
+            <button onclick="menuTroca(false)">TROCAR</button>
+            <button onclick="tentarCapturar()">CAPTURAR</button>
+            <button onclick="fugir()">FUGIR</button>
+        `;
+    }
+
+    function menuTroca(forcar) {
+        if(lock && !forcar) return;
+        escrever("Escolha quem vai lutar:");
+        const c = document.getElementById('btn-container');
+        c.innerHTML = "";
+        
+        party.forEach((m, i) => {
+            let b = document.createElement('button');
+            b.innerText = `${m.name} [HP:${m.hp}]`;
+            b.disabled = m.hp <= 0 || i === activeIdx;
+            b.onclick = () => { 
+                activeIdx = i; 
+                resetMods(); 
+                sync(); 
+                escrever(`Vai, ${m.name}!`);
+                if(forcar) {
+                    setTimeout(() => finalizarTurno(), 1500);
+                } else {
+                    lock = true; // Consome o turno
+                    setTimeout(() => turnoInimigo(), 1500); 
+                }
+            };
+            c.appendChild(b);
+        });
+
+        if(!forcar) {
+            let voltar = document.createElement('button');
+            voltar.innerText = "VOLTAR";
+            voltar.onclick = () => resetMenu();
+            c.appendChild(voltar);
+        }
+    }
+
+    function toggleTeamMenu() {
+        const m = document.getElementById('team-overlay');
+        if(m.style.display === 'none') {
+            m.style.display = 'flex';
+            const list = document.getElementById('full-team-list');
+            list.innerHTML = "";
+            party.forEach(mon => {
+                list.innerHTML += `
+                    <div class="card" style="border-color: ${TYPES[mon.type].color}">
+                        <strong style="color: ${TYPES[mon.type].color}; font-size:12px">${mon.name}</strong><br><br>
+                        LV: ${mon.lvl} | ${mon.type.toUpperCase()}<br>
+                        HP: ${mon.hp}/${mon.maxHp}<br>
+                        ATK: ${Math.floor(mon.atk)} | DEF: ${Math.floor(mon.def)}
+                    </div>`;
+            });
+        } else m.style.display = 'none';
+    }
+
+    async function vitoria() { 
+        escrever(`${enemy.name} foi derrotado! Você ganhou experiência.`); 
+        await esperar(2500);
+        document.getElementById('battle-screen').style.display = 'none'; 
+        lock = false; 
+        atualizarInterface(); 
+    }
+
+    async function tentarCapturar() { 
+        if(lock) return; lock = true;
+        if(party.length >= 6) { escrever("Sua equipe já está cheia!"); await esperar(2000); finalizarTurno(); return; }
+        
+        escrever("Você atirou uma Cápsula de Captura...");
+        await esperar(1500);
+
+        let chance = 1 - (enemy.hp / enemy.maxHp);
+        chance += 0.1; // Bônus base
+        
+        if(Math.random() < chance) { 
+            escrever(`Sucesso! ${enemy.name} foi capturado!`); 
+            party.push({...enemy, hp: enemy.maxHp}); 
+            await esperar(2000);
+            document.getElementById('battle-screen').style.display = 'none'; 
+            lock = false;
+            atualizarInterface();
+        } else { 
+            escrever("Ah não! O monstro escapou da cápsula!"); 
+            await esperar(2000); 
+            turnoInimigo(); 
+        }
+    }
+
+    async function fugir() { 
+        if(lock) return; lock = true;
+        escrever("Você fugiu em segurança!"); 
+        await esperar(1500);
+        document.getElementById('battle-screen').style.display = 'none'; 
+        lock = false; 
+    }
+
+    function animarHit(id) {
+        const el = document.getElementById(id);
+        el.classList.add('flash-red', 'shake');
+        setTimeout(() => el.classList.remove('flash-red', 'shake'), 300);
+    }
+
+    function atualizarInterface() {
+        const side = document.getElementById('mini-team');
+        side.innerHTML = party.map((m, i) => `
+            <div class="mini-card" style="${i === activeIdx ? 'border-color: #00b894; background: #333;' : ''}">
+                <span>${m.name}</span>
+                <span style="color: ${m.hp > 0 ? '#00b894' : '#e74c3c'}">${m.hp}/${m.maxHp}</span>
+            </div>
+        `).join('');
+    }
+
+    function resetMods() { party.forEach(m => {m.mAtk=1; m.mDef=1;}); if(enemy){enemy.mAtk=1; enemy.mDef=1;} }
+    function esperar(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    init();
+</script>
+</body>
+</html>
