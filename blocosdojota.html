@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Block Blast com IA</title>
+    <style>
+        /* Estilização Geral e Fundo do Jogo */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+            
+            /* Fundo da tela de jogar (O seu Vilarejo) */
+            background-color: #1a1a2e;
+            background-image: url("image_5eb577.png"); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            transition: background-image 1.5s ease-in-out;
+        }
+
+        /* ---------------- TELA DE ENTRADA ---------------- */
+        #start-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            
+            /* Imagem do Castelo na Tela Inicial */
+            background-image: url("image_6016cf.png"); 
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            
+            background-color: rgba(15, 20, 30, 0.7); 
+            background-blend-mode: multiply;
+
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        #start-screen h1 {
+            font-size: 60px;
+            color: #f1c40f;
+            text-shadow: 4px 4px 0px #e94560, 8px 8px 0px #0f3460;
+            margin-bottom: 40px;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+        }
+
+        #play-button {
+            padding: 15px 40px;
+            font-size: 28px;
+            font-weight: bold;
+            color: white;
+            background-color: #4cd137;
+            border: 4px solid #2e8621;
+            border-radius: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 6px 0 #2e8621;
+            transition: all 0.1s;
+        }
+
+        #play-button:active {
+            transform: translateY(6px);
+            box-shadow: 0 0px 0 #2e8621;
+        }
+
+        /* ---------------- ÁREA DO JOGO ---------------- */
+        #game-wrapper {
+            background-color: rgba(22, 33, 62, 0.85);
+            padding: 20px;
+            border-radius: 15px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        #loading-bg {
+            position: absolute;
+            top: -40px;
+            font-weight: bold;
+            color: #4cd137;
+            text-shadow: 1px 1px 2px black;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        #score-board {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #f1c40f;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(8, 40px);
+            grid-template-rows: repeat(8, 40px);
+            gap: 2px;
+            background-color: #16213e;
+            padding: 5px;
+            border-radius: 8px;
+            border: 3px solid #0f3460;
+        }
+
+        .cell {
+            background-color: rgba(15, 52, 96, 0.6);
+            border-radius: 4px;
+        }
+
+        .cell.filled {
+            background-color: #e94560;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+            border: 1px solid #c2384f;
+        }
+
+        #pieces-container {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+            min-height: 120px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .piece {
+            display: grid;
+            gap: 2px;
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+        
+        .piece:active {
+            cursor: grabbing;
+            transform: scale(0.9);
+        }
+
+        .piece-cell {
+            width: 30px;
+            height: 30px;
+            background-color: #4cd137;
+            border-radius: 4px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+            border: 1px solid #3eb02c;
+        }
+
+        .piece-cell.empty {
+            background-color: transparent;
+            box-shadow: none;
+            border: none;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen">
+        <h1>BLOCK BLAST<br>PIXEL QUEST</h1>
+        <button id="play-button" onclick="iniciarJogo()">JOGAR</button>
+    </div>
+
+    <div id="game-wrapper">
+        <div id="loading-bg">✨ A IA está a gerar um novo cenário...</div>
+        <div id="score-board">Pontos: 0</div>
+        <div id="game-board"></div>
+        <div id="pieces-container"></div>
+    </div>
+
+    <script>
+        const tamanhoGrade = 8;
+        let grade = Array.from({length: tamanhoGrade}, () => Array(tamanhoGrade).fill(0));
+        let pontos = 0;
+        let nivelAtual = 0; 
+        
+        let formaArrastada = null;
+        let elementoArrastado = null;
+        let offsetArrastoLinha = 0;
+        let offsetArrastoColuna = 0;
+
+        const temasParaIA = [
+            "enchanted forest", 
+            "dark fantasy dungeon", 
+            "floating islands in the sky", 
+            "lava volcano retro", 
+            "cyberpunk city night", 
+            "frozen crystal cave", 
+            "ancient ruins jungle"
+        ];
+
+        const modelosDePecas = [
+            [[1]], [[1, 1]], [[1], [1]], [[1, 1, 1]], [[1], [1], [1]], 
+            [[1, 1], [1, 1]], [[1, 0], [1, 1]], [[0, 1], [1, 1]], 
+            [[1, 1, 1], [1, 1, 1], [1, 1, 1]]    
+        ];
+
+        function iniciarJogo() {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-wrapper').style.display = 'flex';
+
+            const tabuleiroEl = document.getElementById('game-board');
+            tabuleiroEl.innerHTML = ''; 
+            
+            for (let linha = 0; linha < tamanhoGrade; linha++) {
+                for (let coluna = 0; coluna < tamanhoGrade; coluna++) {
+                    let celula = document.createElement('div');
+                    celula.className = 'cell';
+                    celula.dataset.linha = linha;
+                    celula.dataset.coluna = coluna;
+                    celula.addEventListener('dragover', e => e.preventDefault());
+                    celula.addEventListener('drop', lidarComDrop);
+                    tabuleiroEl.appendChild(celula);
+                }
+            }
+            gerarPecas();
+        }
+
+        function gerarPecas() {
+            const container = document.getElementById('pieces-container');
+            container.innerHTML = ''; 
+            for (let i = 0; i < 3; i++) {
+                let modelo = modelosDePecas[Math.floor(Math.random() * modelosDePecas.length)];
+                let pecaEl = document.createElement('div');
+                pecaEl.className = 'piece';
+                pecaEl.draggable = true;
+                pecaEl.style.gridTemplateColumns = `repeat(${modelo[0].length}, 30px)`;
+
+                modelo.forEach((linhaArr, indiceLinha) => {
+                    linhaArr.forEach((valor, indiceColuna) => {
+                        let pCell = document.createElement('div');
+                        pCell.className = valor ? 'piece-cell' : 'piece-cell empty';
+                        if (valor === 1) {
+                            pCell.addEventListener('mousedown', () => {
+                                offsetArrastoLinha = indiceLinha;
+                                offsetArrastoColuna = indiceColuna;
+                            });
+                        }
+                        pecaEl.appendChild(pCell);
+                    });
+                });
+
+                pecaEl.addEventListener('dragstart', (e) => {
+                    formaArrastada = modelo;
+                    elementoArrastado = pecaEl;
+                });
+                container.appendChild(pecaEl);
+            }
+        }
+
+        function lidarComDrop(e) {
+            e.preventDefault();
+            let linhaDestino = parseInt(e.target.dataset.linha) - offsetArrastoLinha;
+            let colunaDestino = parseInt(e.target.dataset.coluna) - offsetArrastoColuna;
+
+            if (!podeEncaixar(formaArrastada, linhaDestino, colunaDestino)) return; 
+
+            encaixarPeca(formaArrastada, linhaDestino, colunaDestino);
+            elementoArrastado.remove(); 
+            verificarLinhasEColunas();
+
+            if (document.getElementById('pieces-container').children.length === 0) gerarPecas();
+        }
+
+        function podeEncaixar(forma, lOrigem, cOrigem) {
+            for (let i = 0; i < forma.length; i++) {
+                for (let j = 0; j < forma[i].length; j++) {
+                    if (forma[i][j] === 1) {
+                        let nl = lOrigem + i, nc = cOrigem + j;
+                        if (nl < 0 || nl >= tamanhoGrade || nc < 0 || nc >= tamanhoGrade || grade[nl][nc] === 1) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function encaixarPeca(forma, lOrigem, cOrigem) {
+            for (let i = 0; i < forma.length; i++) {
+                for (let j = 0; j < forma[i].length; j++) {
+                    if (forma[i][j] === 1) grade[lOrigem + i][cOrigem + j] = 1;
+                }
+            }
+            desenharTabuleiro();
+        }
+
+        function desenharTabuleiro() {
+            const celulas = document.querySelectorAll('#game-board .cell');
+            celulas.forEach(celula => {
+                let l = celula.dataset.linha, c = celula.dataset.coluna;
+                if (grade[l][c] === 1) celula.classList.add('filled');
+                else celula.classList.remove('filled');
+            });
+        }
+
+        function verificarLinhasEColunas() {
+            let linhas = [], colunas = [];
+
+            for (let l = 0; l < tamanhoGrade; l++) if (grade[l].every(v => v === 1)) linhas.push(l);
+            for (let c = 0; c < tamanhoGrade; c++) {
+                let cheia = true;
+                for (let l = 0; l < tamanhoGrade; l++) if (grade[l][c] === 0) cheia = false;
+                if (cheia) colunas.push(c);
+            }
+
+            linhas.forEach(l => grade[l].fill(0));
+            colunas.forEach(c => { for (let l = 0; l < tamanhoGrade; l++) grade[l][c] = 0; });
+
+            let total = linhas.length + colunas.length;
+            if (total > 0) {
+                pontos += total * 100;
+                document.getElementById('score-board').innerText = `Pontos: ${pontos}`;
+                desenharTabuleiro();
+                verificarGeracaoDeFundo(); 
+            }
+        }
+
+        function verificarGeracaoDeFundo() {
+            let novoNivel = Math.floor(pontos / 500);
+
+            if (novoNivel > nivelAtual) {
+                nivelAtual = novoNivel;
+                
+                const aviso = document.getElementById('loading-bg');
+                aviso.style.opacity = '1';
+
+                let tema = temasParaIA[(nivelAtual - 1) % temasParaIA.length];
+                let prompt = `beautiful retro 16-bit pixel art background landscape, ${tema}, high quality, game art, no text`;
+                
+                let urlDaIA = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1920&height=1080&nologo=true&seed=${Math.random()}`;
+
+                let preloader = new Image();
+                preloader.src = urlDaIA;
+                
+                preloader.onload = function() {
+                    document.body.style.backgroundImage = `url('${urlDaIA}')`;
+                    aviso.style.opacity = '0'; 
+                };
+            }
+        }
+    </script>
+</body>
+</html>
