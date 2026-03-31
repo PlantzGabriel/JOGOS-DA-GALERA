@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Office Runner 3D - Escape da Corporação</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #05050a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        
+        /* Telas de Overlay */
+        .overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background: rgba(0,0,0,0.88); color: white; z-index: 10;
+        }
+        
+        /* Cutscene Específica */
+        #cutscene { background: #05050a; z-index: 20; }
+        #cutscene-text {
+            font-size: 28px; text-align: center; max-width: 70%; line-height: 1.6; 
+            opacity: 0; transition: opacity 2s ease-in-out; text-shadow: 2px 2px 4px #000;
+            color: #e0e0e0;
+        }
+        .skip-btn {
+            position: absolute; bottom: 30px; font-size: 16px; color: #888; 
+            cursor: pointer; animation: pulse 2s infinite; letter-spacing: 2px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        button { 
+            padding: 18px 45px; font-size: 22px; cursor: pointer; border: none; 
+            border-radius: 8px; background: #00ffaa; color: #000; font-weight: bold; margin: 15px;
+            transition: 0.2s; box-shadow: 0 4px 10px rgba(0,255,170,0.3);
+        }
+        button:hover { transform: scale(1.1); background: #fff; box-shadow: 0 4px 15px rgba(255,255,255,0.4); }
+        
+        .skin-container { display: flex; gap: 15px; margin-top: 25px; margin-bottom: 25px;}
+        .skin-btn { width: 50px; height: 50px; border: 3px solid white; cursor: pointer; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        
+        #game-ui { position: absolute; top: 25px; left: 25px; color: white; font-size: 36px; display: none; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 5;}
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">PONTOS: 0</div>
+
+    <div id="cutscene" class="overlay">
+        <p id="cutscene-text">
+            "Vc faz parte da maior corporação do mundo, cansado de todo o trabalho exaustivo você decide fugir desse escritório infinito"
+        </p>
+        <p class="skip-btn" onclick="skipCutscene()">[ CLIQUE PARA PULAR ]</p>
+    </div>
+
+    <div id="menu-start" class="overlay hidden">
+        <h1 style="letter-spacing: 7px; color: #00ffaa; font-size: 54px; margin-bottom: 5px;">OFFICE RUNNER</h1>
+        <p style="margin-top: 0; color: #aaa; margin-bottom: 30px; font-size: 20px;">Corra das cadeiras, abaixe sob as luzes!</p>
+        <button onclick="startGame()">INICIAR FUGA</button>
+        <p style="color: #eee;">Escolha a cor da sua Roupa:</p>
+        <div class="skin-container">
+            <div class="skin-btn" style="background: #00d2ff" onclick="changeSkin(0x00d2ff)"></div>
+            <div class="skin-btn" style="background: #ff0055" onclick="changeSkin(0xff0055)"></div>
+            <div class="skin-btn" style="background: #00ff55" onclick="changeSkin(0x00ff55)"></div>
+            <div class="skin-btn" style="background: #ffff00" onclick="changeSkin(0xffff00)"></div>
+        </div>
+    </div>
+
+    <div id="menu-death" class="overlay hidden">
+        <h1 style="color: #ff0055; font-size: 54px;">CAPTURADO PELO RH!</h1>
+        <h2 id="final-score" style="color: white; margin-bottom: 40px; font-size: 32px;">PONTOS: 0</h2>
+        <button onclick="startGame()">TENTAR DE NOVO</button>
+        <button onclick="backToMenu()" style="background: #555; color: white;">MENU PRINCIPAL</button>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    let scene, camera, renderer, playerGroup, playerTorso, playerHead, playerLArm, playerRArm, playerLLeg, playerRLeg;
+    let obstacles = [];
+    let gameActive = false;
+    let score = 0;
+    
+    // Velocidade e físicas ajustadas para a nova escala maior
+    let speed = 0.7; 
+    let velocityY = 0;
+    const gravity = 0.028;
+    const jumpPower = 0.52;
+
+    let currentLane = 1;
+    const lanes = [-4.0, 0, 4.0]; // Pistas mais largas
+    let isJumping = false;
+    let isDucking = false;
+    let playerColor = 0x00d2ff;
+    let duckTimeout;
+    let runCycle = 0;
+
+    // Lógica da Cutscene
+    let cutsceneTimer;
+    window.onload = () => {
+        setTimeout(() => {
+            document.getElementById('cutscene-text').style.opacity = 1;
+        }, 500);
+
+        cutsceneTimer = setTimeout(() => {
+            skipCutscene();
+        }, 7000); // 7 segundos de cutscene antes de ir pro menu
+    };
+
+    window.skipCutscene = () => {
+        clearTimeout(cutsceneTimer);
+        document.getElementById('cutscene').classList.add('hidden');
+        document.getElementById('menu-start').classList.remove('hidden');
+    };
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x10101a);
+        scene.fog = new THREE.Fog(0x10101a, 30, 90);
+
+        // Câmera mais alta e afastada para ver os objetos grandes
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 8, 12);
+        camera.lookAt(0, 2.5, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const light1 = new THREE.DirectionalLight(0xffffff, 2.5);
+        light1.position.set(15, 30, 20);
+        scene.add(light1, new THREE.AmbientLight(0x707070));
+
+        const light2 = new THREE.DirectionalLight(0xaabbff, 1.0);
+        light2.position.set(-15, -5, -15);
+        scene.add(light2);
+
+        // Chão de Escritório (Mais largo)
+        const floorGeo = new THREE.PlaneGeometry(20, 2000);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9, metalness: 0.1 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(1000, 100, 0x333333, 0x222222);
+        grid.position.y = 0.02;
+        scene.add(grid);
+
+        // --- CONSTRUIR O BONEQUINHO (ESCALA 1.5x) ---
+        playerGroup = new THREE.Group();
+        scene.add(playerGroup);
+
+        const matHead = new THREE.MeshStandardMaterial({ color: 0xffdbac }); 
+        const matSuit = new THREE.MeshStandardMaterial({ color: playerColor }); 
+        const matBlack = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+        playerHead = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.75, 0.6), matHead);
+        playerHead.position.set(0, 2.4, 0);
+        playerGroup.add(playerHead);
+
+        playerTorso = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.52), matSuit);
+        playerTorso.position.set(0, 1.65, 0);
+        playerGroup.add(playerTorso);
+
+        const armGeo = new THREE.CylinderGeometry(0.15, 0.15, 1.05);
+        playerLArm = new THREE.Mesh(armGeo, matHead);
+        playerLArm.position.set(-0.67, 1.8, 0);
+        playerGroup.add(playerLArm);
+
+        playerRArm = new THREE.Mesh(armGeo, matHead);
+        playerRArm.position.set(0.67, 1.8, 0);
+        playerGroup.add(playerRArm);
+
+        const legGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.35);
+        playerLLeg = new THREE.Mesh(legGeo, matBlack);
+        playerLLeg.position.set(-0.3, 0.67, 0);
+        playerGroup.add(playerLLeg);
+
+        playerRLeg = new THREE.Mesh(legGeo, matBlack);
+        playerRLeg.position.set(0.3, 0.67, 0);
+        playerGroup.add(playerRLeg);
+
+        playerGroup.position.set(0, 0, 0);
+
+        animate();
+    }
+
+    function animatePlayer(delta) {
+        if (!gameActive || isJumping || isDucking) return;
+
+        runCycle += delta * speed * 35; // Ajustado para a nova velocidade
+        const amplitudeLeg = 0.8;
+        const amplitudeArm = 1.0;
+
+        playerLLeg.rotation.x = Math.sin(runCycle) * amplitudeLeg;
+        playerRLeg.rotation.x = Math.sin(runCycle + Math.PI) * amplitudeLeg;
+        playerLArm.rotation.x = Math.sin(runCycle + Math.PI) * amplitudeArm;
+        playerRArm.rotation.x = Math.sin(runCycle) * amplitudeArm;
+        playerTorso.rotation.x = Math.sin(runCycle*2) * 0.05; 
+    }
+
+    // --- OBSTÁCULOS (ESCALA 1.5x) ---
+    function createChair() {
+        const chairGroup = new THREE.Group();
+        const matChair = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+        const matMetal = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 1 });
+
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.22, 1.95), matChair);
+        seat.position.set(0, 1.05, 0);
+        chairGroup.add(seat);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.8, 0.22), matChair);
+        back.position.set(0, 1.95, -0.9);
+        back.rotation.x = 0.1;
+        chairGroup.add(back);
+
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.05), matMetal);
+        base.position.set(0, 0.52, 0);
+        chairGroup.add(base);
+
+        const legGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.2);
+        for(let i=0; i<4; i++){
+            const leg = new THREE.Mesh(legGeo, matMetal);
+            leg.position.set(i<2?0.45:-0.45, 0.22, i%2==0?0.45:-0.45);
+            leg.rotation.y = Math.PI / 4;
+            chairGroup.add(leg);
+        }
+
+        chairGroup.userData = { isHigh: false };
+        return chairGroup;
+    }
+
+    function createHangingLight() {
+        const lightGroup = new THREE.Group();
+        const matLight = new THREE.MeshStandardMaterial({ color: 0xcccccc, emissive: 0xffffff, emissiveIntensity: 1 });
+        const matWire = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+        // Posicionada mais baixa para forçar o jogador a abaixar
+        const lightFixture = new THREE.Mesh(new THREE.BoxGeometry(6, 0.37, 1.5), matLight);
+        lightFixture.position.set(0, 2.4, 0);
+        lightFixture.rotation.set((Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2);
+        lightGroup.add(lightFixture);
+
+        const wireGeo = new THREE.CylinderGeometry(0.03, 0.03, 4);
+        const wire1 = new THREE.Mesh(wireGeo, matWire);
+        wire1.position.set(-2.7, 4.4, 0);
+        lightGroup.add(wire1);
+        const wire2 = new THREE.Mesh(wireGeo, matWire);
+        wire2.position.set(2.7, 4.4, 0);
+        lightGroup.add(wire2);
+
+        const brokenWire = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2), matWire);
+        brokenWire.position.set(3, 3.4, 0.15);
+        brokenWire.rotation.set(1.2, 0, 0.5);
+        lightGroup.add(brokenWire);
+
+        lightGroup.userData = { isHigh: true };
+        return lightGroup;
+    }
+
+    function cancelDuck() {
+        isDucking = false;
+        playerGroup.scale.y = 1;
+        playerGroup.position.y = isJumping ? playerGroup.position.y : 0;
+        if(duckTimeout) clearTimeout(duckTimeout);
+    }
+
+    window.startGame = () => {
+        score = 0;
+        speed = 0.7; // Velocidade inicial
+        currentLane = 1;
+        obstacles.forEach(o => scene.remove(o));
+        obstacles = [];
+        gameActive = true;
+        document.getElementById('game-ui').innerText = "PONTOS: 0";
+        document.getElementById('menu-start').classList.add('hidden');
+        document.getElementById('menu-death').classList.add('hidden');
+        document.getElementById('game-ui').style.display = 'block';
+    };
+
+    window.backToMenu = () => {
+        document.getElementById('menu-death').classList.add('hidden');
+        document.getElementById('menu-start').classList.remove('hidden');
+        document.getElementById('game-ui').style.display = 'none';
+    };
+
+    window.changeSkin = (color) => {
+        playerColor = color;
+        playerTorso.material.color.setHex(color);
+        playerHead.material.color.setHex(color); 
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if (!gameActive) return;
+
+        if (e.code === 'ArrowLeft' && currentLane > 0) currentLane--;
+        if (e.code === 'ArrowRight' && currentLane < 2) currentLane++;
+
+        if (e.code === 'ArrowUp' || e.code === 'Space') {
+            if (!isJumping) {
+                if (isDucking) cancelDuck();
+                velocityY = jumpPower;
+                isJumping = true;
+                playerLLeg.rotation.x = -0.6;
+                playerRLeg.rotation.x = 0.4;
+            }
+        }
+
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+            if (!isJumping) {
+                isDucking = true;
+                playerGroup.scale.y = 0.4; // Achata o boneco
+                
+                if(duckTimeout) clearTimeout(duckTimeout);
+                duckTimeout = setTimeout(() => {
+                    if(isDucking) cancelDuck();
+                }, 650);
+            }
+        }
+    });
+
+    let prevTime = performance.now();
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const time = performance.now();
+        const delta = (time - prevTime) / 1000;
+        prevTime = time;
+
+        if (gameActive) {
+            animatePlayer(delta);
+
+            // Transição de pista (Lerp)
+            playerGroup.position.x += (lanes[currentLane] - playerGroup.position.x) * 0.28;
+
+            // Física do Pulo
+            if (isJumping) {
+                playerGroup.position.y += velocityY;
+                velocityY -= gravity;
+                if (playerGroup.position.y <= 0) {
+                    playerGroup.position.y = 0;
+                    isJumping = false;
+                    velocityY = 0;
+                }
+            }
+
+            // Gerador de Obstáculos
+            if (Math.floor(time / 10) % 45 === 0) {
+                const isHigh = Math.random() > 0.6;
+                const obs = isHigh ? createHangingLight() : createChair();
+                const lane = lanes[Math.floor(Math.random() * 3)];
+                obs.position.set(lane, 0, -120); // Surgem mais de longe agora
+                scene.add(obs);
+                obstacles.push(obs);
+            }
+
+            // Mover e Checar Colisão
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z += speed;
+
+                const dx = Math.abs(playerGroup.position.x - obs.position.x);
+                const dz = Math.abs(playerGroup.position.z - obs.position.z);
+
+                if (obs.userData.isHigh) {
+                    // Luz (Alto) - Morre se não abaixar
+                    if (dx < 2.2 && dz < 1.6 && !isDucking) {
+                        gameOver();
+                    }
+                } else {
+                    // Cadeira (Baixo) - Morre se não pular alto o suficiente
+                    if (dx < 1.4 && dz < 1.4) {
+                         if (playerGroup.position.y < 2.5) { 
+                            gameOver();
+                         }
+                    }
+                }
+
+                if (obs.position.z > 20) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('game-ui').innerText = `PONTOS: ${score}`;
+                    speed += 0.0008; // Aceleração do jogo
+                }
+            }
+        }
+        renderer.render(scene, camera);
+    }
+
+    function gameOver() {
+        gameActive = false;
+        document.getElementById('final-score').innerText = `PONTOS: ${score}`;
+        document.getElementById('menu-death').classList.remove('hidden');
+    }
+
+    init();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
