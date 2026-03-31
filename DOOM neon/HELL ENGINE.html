@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>HELL ENGINE 3D - QUANTUM JUMP</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  body { 
+    margin: 0; 
+    background: #050000; 
+    overflow: hidden; 
+    user-select: none; 
+    font-family: 'Orbitron', sans-serif;
+  }
+  
+  canvas { 
+    display: block; 
+    width: 100vw; 
+    height: 100vh; 
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+
+  /* EFEITO DE TRANSMISSÃO CRT */
+  #crt-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    pointer-events: none;
+    z-index: 11;
+    background: 
+      linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+      linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 4px, 3px 100%;
+    box-shadow: inset 0 0 100px rgba(0,0,0,0.95);
+    animation: flicker 0.15s infinite;
+  }
+
+  #scanline {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 20px;
+    background: rgba(0, 255, 204, 0.05);
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 12;
+    box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+    animation: scan 6s linear infinite;
+  }
+
+  @keyframes flicker {
+    0% { opacity: 0.95; }
+    50% { opacity: 0.85; }
+    100% { opacity: 0.95; }
+  }
+
+  @keyframes scan {
+    0% { top: -20px; }
+    100% { top: 100vh; }
+  }
+  
+  .neon-orange { color: #ff5500; text-shadow: 0 0 5px #ff5500, 0 0 10px #ff5500; }
+  .neon-blood { color: #cc0000; text-shadow: 0 0 5px #cc0000, 0 0 15px #aa0000; }
+  .neon-magenta { color: #ff0055; text-shadow: 0 0 5px #ff0055, 0 0 15px #ff0055; }
+  .neon-cyan { color: #00ffcc; text-shadow: 0 0 5px #00ffcc, 0 0 15px #00ffcc; }
+  .neon-bone { color: #dcdcaa; text-shadow: 0 0 5px #dcdcaa; }
+
+  #hud {
+    position: fixed; bottom: 20px; left: 20px;
+    font-size: 18px; font-weight: 700; display: none;
+    letter-spacing: 2px; z-index: 10; line-height: 1.5;
+    color: #00ffcc; text-shadow: 0 0 5px #00ffcc;
+  }
+  
+  #pauseBtn {
+    position: fixed; top: 20px; right: 20px;
+    padding: 10px 20px; background: rgba(30, 0, 0, 0.8); color: #00ffcc;
+    font-family: 'Orbitron', sans-serif; font-weight: bold; font-size: 18px;
+    border: 2px solid #00ffcc; box-shadow: 0 0 10px #00ffcc, inset 0 0 10px #00ffcc;
+    display: none; cursor: pointer; text-transform: uppercase;
+    transition: 0.2s; z-index: 25;
+  }
+  #pauseBtn:hover { background: #00ffcc; color: #110000; box-shadow: 0 0 20px #00ffcc; }
+  
+  #flash {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #ff0000; opacity: 0; pointer-events: none; transition: opacity 0.1s;
+    mix-blend-mode: multiply; z-index: 5;
+  }
+
+  #worldShiftText {
+    position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 40px; font-weight: 900; color: #ffaa00; text-shadow: 0 0 20px #ff0000;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 15;
+    letter-spacing: 5px; text-transform: uppercase; text-align: center;
+  }
+
+  .overlay-menu {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle at center, rgba(10,0,20,0.95) 0%, rgba(0,0,0,0.98) 100%); 
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; z-index: 30;
+  }
+  
+  .overlay-menu h1 { font-size: 60px; font-weight: 900; margin-bottom: 5px; letter-spacing: 5px; }
+  .overlay-menu h3 { font-size: 20px; color: #00ffcc; margin-bottom: 30px; letter-spacing: 3px; font-weight: 500; text-shadow: 0 0 10px #00ffcc;}
+  .controls { font-size: 16px; color: #aa5555; margin-bottom: 30px; line-height: 1.8; text-shadow: 0 0 5px #550000; font-family: monospace; }
+  .controls span { color: #00ffcc; font-weight: bold; }
+
+  .menu-btn {
+    padding: 15px 40px; margin: 10px; font-size: 20px; font-weight: 700; width: 300px;
+    background: rgba(20, 0, 10, 0.8); cursor: pointer; font-family: 'Orbitron', sans-serif; transition: 0.2s;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  
+  .btn-cyan { border: 2px solid #00ffcc; color: #00ffcc; box-shadow: 0 0 10px #00ffcc, inset 0 0 5px #00ffcc; }
+  .btn-cyan:hover { background: #00ffcc; color: #000; box-shadow: 0 0 25px #00ffcc; transform: scale(1.05); }
+
+  .btn-magenta { border: 2px solid #ff0055; color: #ff0055; box-shadow: 0 0 10px #ff0055, inset 0 0 5px #ff0055; }
+  .btn-magenta:hover { background: #ff0055; color: #000; box-shadow: 0 0 25px #ff0055; transform: scale(1.05); }
+
+  #deathMenu, #pauseMenu { display: none; }
+  #deathMenu h2 { color: #fff; font-size: 24px; letter-spacing: 3px; margin-bottom: 40px; opacity: 0.8; }
+
+  .settings-box { margin-bottom: 30px; padding: 20px; border: 1px solid #ff0055; background: rgba(255,0,85,0.05); box-shadow: 0 0 10px rgba(255,0,85,0.2); }
+  .slider { -webkit-appearance: none; width: 250px; height: 10px; background: #1a001a; outline: none; border: 1px solid #ff0055; margin-top: 15px; }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 25px; background: #00ffcc; cursor: pointer; box-shadow: 0 0 10px #00ffcc; }
+
+</style>
+</head>
+<body>
+
+<div id="menu" class="overlay-menu">
+  <h1 class="neon-magenta">NEON ENGINE</h1>
+  <h3>[V.8.0: QUANTUM JUMP]</h3>
+  
+  <div class="controls">
+    <span>[W, A, S, D]</span> Movement | <span>[SPACE]</span> Attack<br>
+    <span>[P]</span> Pause/Options
+  </div>
+
+  <div class="settings-box">
+    <label class="neon-magenta" style="font-size: 18px; letter-spacing: 2px;">SENSITIVITY: <span id="menuSensVal" class="neon-bone">33</span>%</label><br>
+    <input type="range" id="menuSensSlider" min="0.01" max="0.15" step="0.01" value="0.05" class="slider">
+  </div>
+
+  <button class="menu-btn btn-cyan" onclick="startGame()">ENTER DATA CORE</button>
+</div>
+
+<div id="pauseMenu" class="overlay-menu">
+  <h1 class="neon-magenta">SYSTEM PAUSED</h1>
+  <div class="settings-box">
+    <label class="neon-magenta" style="font-size: 18px; letter-spacing: 2px;">SENSITIVITY: <span id="pauseSensVal" class="neon-bone">33</span>%</label><br>
+    <input type="range" id="pauseSensSlider" min="0.01" max="0.15" step="0.01" value="0.05" class="slider">
+  </div>
+  <button class="menu-btn btn-cyan" onclick="togglePause()">RESUME</button>
+</div>
+
+<div id="deathMenu" class="overlay-menu">
+  <h1 class="neon-blood">CRITICAL FAILURE</h1>
+  <h2>BIOMETRICS TERMINATED</h2>
+  <button class="menu-btn btn-magenta" onclick="restartGame()">REBOOT</button>
+</div>
+
+<div id="crt-overlay"></div>
+<div id="scanline"></div>
+
+<canvas id="game"></canvas>
+<div id="hud"></div>
+<button id="pauseBtn" onclick="togglePause()">PAUSE</button>
+<div id="flash"></div>
+<div id="worldShiftText">SYSTEM CORRUPTED...</div>
+
+<script>
+const GAME_WIDTH = 426;
+const GAME_HEIGHT = 240;
+
+const c = document.getElementById("game"), ctx = c.getContext("2d");
+c.width = GAME_WIDTH; 
+c.height = GAME_HEIGHT;
+
+const mapCollection = [
+  [
+    "111111111111111111111111",
+    "100000000010000000000001",
+    "102222222010333333333301",
+    "102000002010300000000301",
+    "102000002000300000000301",
+    "102000002000300033333301",
+    "102220222010300000000001",
+    "100000000010333333333331",
+    "111110111110000000000001",
+    "100000000000000000000001",
+    "101111111111110111111101",
+    "100000000000000000000001",
+    "101111111111110111111101",
+    "100000000000000000000001",
+    "111111111111111111111111"
+  ],
+  [
+    "222222222222222222222222",
+    "200000000022220000000002",
+    "202222220022220022222202",
+    "200000000000000000000002",
+    "222220011111111110022222",
+    "222220010000000010022222",
+    "200000010000000010000002",
+    "200000011110011110000002",
+    "202222220000000022222202",
+    "200000000022220000000002",
+    "222222222222222222222222"
+  ],
+  [
+    "333333333333333333333333",
+    "300000300000000030000003",
+    "303330303333333030333303",
+    "300030003000003000300003",
+    "333033333033303333303333",
+    "300000000030000000000003",
+    "303333333330333333333303",
+    "303000000000000000000303",
+    "303033333333333333330303",
+    "300000000000000000000003",
+    "333333333333333333333333"
+  ],
+  [
+    "444444444444444444444444",
+    "400000000000000000000004",
+    "401100000000000000001104",
+    "401100444440044444001104",
+    "400000400000000004000004",
+    "400000400000000004000004",
+    "400000444440044444000004",
+    "401100000000000000001104",
+    "401100000000000000001104",
+    "400000000000000000000004",
+    "444444444444444444444444"
+  ]
+];
+
+let map = [];
+const tile = 64;
+
+let px = 96, py = 96, pa = 0, vx = 0, vy = 0, hp = 100, ammo = 0; 
+let hasSword = false;
+const accel = 0.5, friction = 0.80, maxSpeed = 5;
+const playerRadius = 15;
+let turnSpeed = 0.05; 
+let paused = true, gameStarted = false, isDead = false;
+let gunRecoil = 0, isPunching = 0, punchSide = 0; 
+let killCount = 0; 
+let viewKickBack = 0; 
+
+let currentLevel = 1;
+let isTransitioning = false;
+let teleportStart = 0; // Temporizador do teletransporte
+let teleportAnim = 0;  // Progresso do teletransporte (0 a 1)
+
+let enemies = [];
+let collectibles = []; 
+let keys = {};
+let zBuffer = new Array(c.width);
+
+const menuSensSlider = document.getElementById("menuSensSlider");
+const pauseSensSlider = document.getElementById("pauseSensSlider");
+const menuSensVal = document.getElementById("menuSensVal");
+const pauseSensVal = document.getElementById("pauseSensVal");
+
+function updateSensitivity(val) {
+  turnSpeed = parseFloat(val);
+  let percentage = Math.round((turnSpeed / 0.15) * 100);
+  menuSensSlider.value = val; pauseSensSlider.value = val;
+  menuSensVal.innerText = percentage; pauseSensVal.innerText = percentage;
+}
+
+menuSensSlider.addEventListener('input', (e) => updateSensitivity(e.target.value));
+pauseSensSlider.addEventListener('input', (e) => updateSensitivity(e.target.value));
+
+function startLevel(lvl) {
+  currentLevel = lvl;
+  isTransitioning = false;
+  teleportAnim = 0;
+  
+  // Limpa os efeitos visuais de transição do HTML
+  let f = document.getElementById("flash");
+  f.style.transition = "opacity 0.2s";
+  f.style.opacity = 0;
+  document.getElementById("worldShiftText").style.opacity = 0;
+  setTimeout(() => { f.style.background = "#ff0000"; f.style.mixBlendMode = "multiply"; }, 200);
+
+  hp = Math.min(100, hp + 25);
+  
+  let mapIndex = (lvl - 1) % mapCollection.length;
+  map = mapCollection[mapIndex].map(row => row.split(''));
+  
+  let enemyCount = 3 + (lvl * 2); 
+  let enemyHp = 5 + (lvl * 1.5); 
+  let enemySpeedMult = 1 + (lvl * 0.1); 
+  
+  enemies = [];
+  collectibles = [];
+  let emptySpaces = [];
+  let playerPlaced = false;
+  
+  for (let y = 1; y < map.length - 1; y++) {
+    for (let x = 1; x < map[0].length - 1; x++) {
+      if (map[y][x] === "0") {
+        if(!playerPlaced) {
+          px = x * tile + tile / 2;
+          py = y * tile + tile / 2;
+          playerPlaced = true;
+        } else if (x > 3 || y > 3) { 
+          emptySpaces.push({x: x * tile + tile/2, y: y * tile + tile/2});
+        }
+      }
+    }
+  }
+  
+  emptySpaces.sort(() => Math.random() - 0.5);
+  
+  if (!hasSword && emptySpaces.length > 0) {
+    let spot = emptySpaces.pop();
+    collectibles.push({x: spot.x, y: spot.y, type: 'sword', active: true});
+  }
+  
+  for(let i = 0; i < enemyCount && i < emptySpaces.length; i++) {
+    enemies.push({
+      x: emptySpaces[i].x, y: emptySpaces[i].y, 
+      hp: enemyHp, maxHp: enemyHp, lastHit: 0, state: 'idle', 
+      tx: emptySpaces[i].x, ty: emptySpaces[i].y, 
+      timer: 0, path: [], lastPathCalc: 0,
+      speedMult: enemySpeedMult
+    });
+  }
+}
+
+function startGame() {
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("deathMenu").style.display = "none";
+  document.getElementById("pauseMenu").style.display = "none";
+  document.getElementById("hud").style.display = "block";
+  document.getElementById("pauseBtn").style.display = "block";
+  paused = false; isDead = false; gameStarted = true;
+  if(enemies.length === 0) startLevel(1);
+}
+
+function togglePause() {
+  if (!gameStarted || isDead || isTransitioning) return;
+  paused = !paused;
+  if (paused) {
+    document.getElementById("pauseMenu").style.display = "flex";
+    document.getElementById("pauseBtn").style.display = "none";
+    document.getElementById("hud").style.display = "none";
+  } else {
+    document.getElementById("pauseMenu").style.display = "none";
+    document.getElementById("pauseBtn").style.display = "block";
+    document.getElementById("hud").style.display = "block";
+  }
+}
+
+function showDeathMenu() {
+  isDead = true;
+  document.getElementById("deathMenu").style.display = "flex";
+  document.getElementById("hud").style.display = "none";
+  document.getElementById("pauseBtn").style.display = "none";
+}
+
+function restartGame() {
+  px = 96; py = 96; pa = 0; vx = 0; vy = 0; hp = 100; ammo = 0; killCount = 0; hasSword = false;
+  startLevel(1);
+  startGame();
+}
+
+function triggerWorldShift(isNextLevel = false) {
+  let f = document.getElementById("flash"); 
+  let t = document.getElementById("worldShiftText");
+  
+  if(isNextLevel) {
+    t.innerHTML = `[ INICIANDO SALTO QUÂNTICO ]<br><span style="font-size: 24px;">CARREGANDO SETOR ${currentLevel + 1}...</span>`;
+    t.style.color = "#00ffcc"; t.style.textShadow = "0 0 30px #ffffff";
+    
+    // Configura o flash para o teletransporte visual via CSS (Cegante Branco/Ciano)
+    f.style.background = "#ffffff";
+    f.style.mixBlendMode = "screen";
+    f.style.transition = "opacity 3s cubic-bezier(0.5, 0, 1, 1)"; // Fade lento acelerando pro final
+    f.style.opacity = 1;
+    t.style.opacity = 1;
+  } else {
+    t.innerText = "SYSTEM CORRUPTED...";
+    t.style.color = "#ffaa00"; t.style.textShadow = "0 0 20px #ff0000";
+    f.style.background = "#ff0055"; 
+    f.style.mixBlendMode = "screen"; 
+    f.style.transition = "opacity 0.1s";
+    f.style.opacity = 0.8; t.style.opacity = 1;
+    setTimeout(() => { 
+      f.style.opacity = 0; t.style.opacity = 0;
+      setTimeout(() => { f.style.background = "#ff0000"; f.style.mixBlendMode = "multiply"; }, 200);
+    }, 800);
+  }
+}
+
+function castRay(a) {
+  let sin = Math.sin(a), cos = Math.cos(a);
+  for (let d = 0; d < 1500; d += 2) { 
+    let x = px + cos * d, y = py + sin * d;
+    let mx = Math.floor(x / tile), my = Math.floor(y / tile);
+    if (map[my] && map[my][mx] !== "0") return { d: d, type: map[my][mx], hitX: x, hitY: y };
+  }
+  return { d: 1500, type: "1", hitX: 0, hitY: 0 };
+}
+
+function hasLineOfSight(x1, y1, x2, y2) {
+  let dx = x2 - x1, dy = y2 - y1;
+  let dist = Math.sqrt(dx * dx + dy * dy);
+  let steps = dist / (tile / 4); 
+  for(let i = 1; i < steps; i++) {
+    let cx = x1 + (dx / steps) * i, cy = y1 + (dy / steps) * i;
+    let mx = Math.floor(cx / tile), my = Math.floor(cy / tile);
+    if(map[my] && map[my][mx] !== "0") return false; 
+  }
+  return true; 
+}
+
+function getPath(sx, sy, tx, ty) {
+  let startGrid = {x: Math.floor(sx / tile), y: Math.floor(sy / tile)};
+  let targetGrid = {x: Math.floor(tx / tile), y: Math.floor(ty / tile)};
+  if (startGrid.x === targetGrid.x && startGrid.y === targetGrid.y) return [];
+  let queue = [[startGrid]];
+  let visited = new Set();
+  visited.add(`${startGrid.x},${startGrid.y}`);
+  let dirs = [{x:0,y:-1}, {x:0,y:1}, {x:-1,y:0}, {x:1,y:0}]; 
+
+  while(queue.length > 0) {
+    let path = queue.shift();
+    let current = path[path.length - 1];
+    if (current.x === targetGrid.x && current.y === targetGrid.y) {
+      return path.slice(1).map(p => ({ x: p.x * tile + tile/2, y: p.y * tile + tile/2 }));
+    }
+    for (let d of dirs) {
+      let nx = current.x + d.x, ny = current.y + d.y;
+      if (ny >= 0 && ny < map.length && nx >= 0 && nx < map[0].length) {
+        if (map[ny][nx] === "0" && !visited.has(`${nx},${ny}`)) {
+          visited.add(`${nx},${ny}`);
+          queue.push([...path, {x: nx, y: ny}]);
+        }
+      }
+    }
+  }
+  return []; 
+}
+
+function draw3D(time) {
+  ctx.save();
+  let horizonShift = Math.sin((viewKickBack/20) * Math.PI) * (c.height * 0.05);
+  
+  let ceilingGradient = ctx.createLinearGradient(0, 0, 0, c.height / 2 + horizonShift);
+  ceilingGradient.addColorStop(0, "#1a0515");
+  ceilingGradient.addColorStop(1, "#050000");
+  ctx.fillStyle = ceilingGradient; 
+  ctx.fillRect(0, 0, c.width, c.height / 2 + horizonShift); 
+  
+  ctx.fillStyle = "#02080a"; 
+  ctx.fillRect(0, c.height / 2 + horizonShift, c.width, c.height / 2 - horizonShift);
+  ctx.restore();
+
+  const fov = 1.0; 
+  let currentFov = fov;
+  let yStretch = 0;
+  let colorWhiten = 0;
+
+  // CÁLCULOS DO EFEITO DE TELETRANSPORTE
+  if (isTransitioning) {
+      let ease = Math.pow(teleportAnim, 3); // Começa devagar, termina rápido
+      currentFov = fov - (fov * 0.8 * ease); // Fechamento em Túnel (Zoom)
+      yStretch = ease * c.height * 3; // Esticamento Vertical extremo
+      colorWhiten = ease; // Paredes ficam brancas/brilhantes
+  }
+
+  for (let i = 0; i < c.width; i++) {
+    let a = pa - (currentFov/2) + (i / c.width) * currentFov;
+    let ray = castRay(a);
+    let correctedDistance = ray.d * Math.cos(pa - a); 
+    zBuffer[i] = correctedDistance; 
+    let h = (tile * c.height) / correctedDistance; 
+    
+    // Aplica o Esticamento do Teletransporte
+    h += yStretch;
+
+    let alpha = Math.max(0.1, 1 - correctedDistance / 1000);
+    let r = 0, g = 0, b = 0;
+    
+    if (ray.type === "1") { r = 180; g = 0; b = 80; } 
+    else if (ray.type === "2") { r = 0; g = 200; b = 100; } 
+    else if (ray.type === "3") { r = 100; g = 50; b = 150; } 
+    else if (ray.type === "4") { r = 255; g = 0; b = 85; alpha = Math.max(0.6, alpha + 0.4); }
+
+    // Aplica o esbranquiçamento do teletransporte
+    r = r + (255 - r) * colorWhiten;
+    g = g + (255 - g) * colorWhiten;
+    b = b + (255 - b) * colorWhiten;
+
+    let isEdge = (ray.hitX % tile < 2 || ray.hitX % tile > tile - 2 || ray.hitY % tile < 2 || ray.hitY % tile > tile - 2);
+    if (isEdge) {
+        ctx.fillStyle = `rgba(${r*0.4}, ${g*0.4}, ${b*0.4}, ${alpha})`; 
+    } else {
+        let textureMod = (Math.floor(ray.hitX*2) + Math.floor(ray.hitY*2)) % 7 === 0 ? 0.3 : 1;
+        ctx.fillStyle = `rgba(${r * textureMod}, ${g * textureMod}, ${b * textureMod}, ${alpha})`;
+    }
+    
+    ctx.fillRect(i, c.height / 2 - h / 2 + horizonShift, 1, h);
+
+    if (h > 0 && h < c.height * 3) {
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`; 
+        ctx.fillRect(i, c.height / 2 - h / 2 + horizonShift, 1, Math.max(1, h * 0.01)); 
+        ctx.fillRect(i, c.height / 2 + h / 2 - Math.max(1, h * 0.01) + horizonShift, 1, Math.max(1, h * 0.01)); 
+    }
+  }
+
+  // DESENHA OS FEIXES DE DADOS (DATA BEAMS) DURANTE O TELETRANSPORTE
+  if (isTransitioning && teleportAnim > 0) {
+      ctx.fillStyle = `rgba(0, 255, 204, ${teleportAnim * 0.8})`;
+      for(let i = 0; i < 40; i++) {
+          let lx = Math.random() * c.width;
+          // Linhas sobem extremamente rápido baseadas no tempo
+          let ly = (Math.random() * c.height * 2 - (time * 5) % (c.height * 2));
+          let lw = Math.random() * 3 + 1;
+          let lh = Math.random() * 200 + 50;
+          ctx.fillRect(lx, ly, lw, lh);
+      }
+      ctx.fillStyle = `rgba(255, 255, 255, ${teleportAnim})`;
+      for(let i = 0; i < 20; i++) {
+          let lx = Math.random() * c.width;
+          let ly = (Math.random() * c.height * 2 - (time * 8) % (c.height * 2));
+          let lw = Math.random() * 2;
+          let lh = Math.random() * 100 + 100;
+          ctx.fillRect(lx, ly, lw, lh);
+      }
+  }
+
+  if (viewKickBack > 0) viewKickBack -= 2; 
+}
+
+function drawCollectibles(time) {
+  if(isTransitioning) return; // Esconde itens durante salto
+  let horizonShift = Math.sin((viewKickBack/20) * Math.PI) * (c.height * 0.05);
+  
+  let sortedItems = [...collectibles].filter(c => c.active).sort((a, b) => {
+    let d1 = Math.pow(a.x - px, 2) + Math.pow(a.y - py, 2);
+    let d2 = Math.pow(b.x - px, 2) + Math.pow(b.y - py, 2);
+    return d2 - d1; 
+  });
+
+  sortedItems.forEach(item => {
+    let dx = item.x - px, dy = item.y - py;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+    let angle = Math.atan2(dy, dx) - pa;
+    
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    while (angle > Math.PI) angle -= 2 * Math.PI;
+
+    if (Math.abs(angle) < 1.2) { 
+      let sx = (angle + 0.5) * c.width; 
+      let size = (tile * c.height) / dist; 
+      let eWidth = size * 0.4; 
+      let eHeight = size * 1.5; 
+      let startX = Math.floor(sx - eWidth / 2);
+      let endX = Math.floor(sx + eWidth / 2);
+
+      ctx.save();
+      ctx.beginPath();
+      let blockStart = -1;
+      let hasVisible = false;
+      
+      for (let i = startX; i <= endX + 1; i++) {
+        let isVisible = (i >= 0 && i < c.width && zBuffer[i] > dist);
+        if (isVisible && i <= endX) {
+          if (blockStart === -1) blockStart = i;
+        } else {
+          if (blockStart !== -1) {
+            ctx.rect(blockStart, 0, i - blockStart, c.height);
+            hasVisible = true;
+            blockStart = -1;
+          }
+        }
+      }
+
+      if (hasVisible) {
+        ctx.clip(); 
+        let bob = Math.sin(time / 200) * (eHeight * 0.1);
+        let centerY = c.height / 2 + size * 0.3 + horizonShift + bob; 
+
+        ctx.translate(sx, centerY);
+        
+        ctx.shadowColor = "#00ffcc";
+        ctx.shadowBlur = 15;
+        
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.moveTo(0, -eHeight * 0.6); ctx.lineTo(-eWidth * 0.2, -eHeight * 0.1); ctx.lineTo(eWidth * 0.2, -eHeight * 0.1); ctx.fill();
+        ctx.fillStyle = "#00ffcc";
+        ctx.beginPath(); ctx.moveTo(0, -eHeight * 0.55); ctx.lineTo(-eWidth * 0.05, -eHeight * 0.1); ctx.lineTo(eWidth * 0.05, -eHeight * 0.1); ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#222"; ctx.fillRect(-eWidth * 0.4, -eHeight * 0.1, eWidth * 0.8, eHeight * 0.05);
+        ctx.fillStyle = "#555"; ctx.fillRect(-eWidth * 0.1, -eHeight * 0.05, eWidth * 0.2, eHeight * 0.2);
+        ctx.fillStyle = "#00ffcc";
+        ctx.beginPath(); ctx.arc(0, eHeight * 0.15, eWidth * 0.15, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  });
+}
+
+function drawEnemies(time) {
+  if(isTransitioning) return; // Esconde inimigos mortos durante o salto
+  let horizonShift = Math.sin((viewKickBack/20) * Math.PI) * (c.height * 0.05);
+  
+  let sortedEnemies = [...enemies].sort((a, b) => {
+    let d1 = Math.pow(a.x - px, 2) + Math.pow(a.y - py, 2);
+    let d2 = Math.pow(b.x - px, 2) + Math.pow(b.y - py, 2);
+    return d2 - d1; 
+  });
+
+  sortedEnemies.forEach(e => {
+    let dx = e.x - px, dy = e.y - py;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+    let angle = Math.atan2(dy, dx) - pa;
+    
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    while (angle > Math.PI) angle -= 2 * Math.PI;
+
+    if (Math.abs(angle) < 1.2) { 
+      let sx = (angle + 0.5) * c.width; 
+      let size = (tile * c.height) / dist; 
+      let eWidth = size * 1.5; 
+      let eHeight = size * 1.8; 
+      let startX = Math.floor(sx - eWidth / 2);
+      let endX = Math.floor(sx + eWidth / 2);
+
+      let isDead = e.state === 'dead';
+      let animProgress = isDead ? (time - e.deathStart) / 800 : 0;
+      if (animProgress > 1) animProgress = 1;
+
+      ctx.save();
+      ctx.beginPath();
+      let blockStart = -1;
+      let hasVisible = false;
+      
+      for (let i = startX; i <= endX + 1; i++) {
+        let isVisible = (i >= 0 && i < c.width && zBuffer[i] > dist);
+        if (isVisible && i <= endX) {
+          if (blockStart === -1) blockStart = i;
+        } else {
+          if (blockStart !== -1) {
+            ctx.rect(blockStart, 0, i - blockStart, c.height);
+            hasVisible = true;
+            blockStart = -1;
+          }
+        }
+      }
+
+      if (hasVisible) {
+        ctx.clip(); 
+
+        let currentHeight = eHeight * (1 - animProgress);
+        let floorY = c.height / 2 + size * 0.7 + horizonShift; 
+        let centerY = floorY - currentHeight / 2; 
+        
+        let bob = isDead ? 0 : Math.sin(time / (200 / e.speedMult) + e.x) * (eHeight * 0.05);
+        centerY += bob;
+
+        ctx.translate(sx, centerY);
+        let w = eWidth;
+        let h = currentHeight;
+
+        if (isDead) {
+          ctx.fillStyle = `rgba(100, 0, 50, ${1 - animProgress})`;
+          ctx.beginPath(); ctx.ellipse(0, h/2, w/2, h*0.2, 0, 0, Math.PI*2); ctx.fill();
+        } else {
+          ctx.fillStyle = "#4a0033"; ctx.beginPath();
+          ctx.moveTo(-w*0.25, -h*0.3); ctx.lineTo(w*0.25, -h*0.3); ctx.lineTo(w*0.15, h*0.1); ctx.lineTo(w*0.25, h*0.45); ctx.lineTo(w*0.05, h*0.45); ctx.lineTo(0, h*0.15); ctx.lineTo(-w*0.05, h*0.45); ctx.lineTo(-w*0.25, h*0.45); ctx.lineTo(-w*0.15, h*0.1); ctx.fill();
+
+          ctx.strokeStyle = "#220011"; ctx.lineWidth = Math.max(1, w*0.02);
+          ctx.beginPath(); ctx.moveTo(-w*0.15, -h*0.1); ctx.lineTo(w*0.15, -h*0.1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-w*0.1, 0); ctx.lineTo(w*0.1, 0); ctx.stroke();
+
+          ctx.fillStyle = "#a39785"; ctx.beginPath();
+          ctx.moveTo(-w*0.2, -h*0.25); ctx.lineTo(w*0.2, -h*0.25); ctx.lineTo(w*0.1, -h*0.05); ctx.lineTo(0, h*0.05); ctx.lineTo(-w*0.1, -h*0.05); ctx.fill();
+          ctx.strokeStyle = "#332b22"; ctx.lineWidth = 1; ctx.stroke(); 
+
+          ctx.fillStyle = "#c8bca7"; ctx.beginPath();
+          ctx.moveTo(-w*0.12, -h*0.45); ctx.lineTo(w*0.12, -h*0.45); ctx.lineTo(w*0.08, -h*0.25); ctx.lineTo(0, -h*0.2); ctx.lineTo(-w*0.08, -h*0.25); ctx.fill(); ctx.stroke();
+
+          ctx.fillStyle = "#ffaa00"; 
+          ctx.beginPath(); ctx.moveTo(-w*0.08, -h*0.35); ctx.lineTo(-w*0.02, -h*0.32); ctx.lineTo(-w*0.06, -h*0.3); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(w*0.08, -h*0.35); ctx.lineTo(w*0.02, -h*0.32); ctx.lineTo(w*0.06, -h*0.3); ctx.fill();
+
+          ctx.fillStyle = "#554d44";
+          ctx.beginPath(); ctx.moveTo(-w*0.08, -h*0.45); ctx.lineTo(-w*0.2, -h*0.55); ctx.lineTo(-w*0.02, -h*0.45); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(w*0.08, -h*0.45); ctx.lineTo(w*0.2, -h*0.55); ctx.lineTo(w*0.02, -h*0.45); ctx.fill();
+
+          ctx.fillStyle = "#111"; ctx.fillRect(-w*0.05, -h*0.28, w*0.1, h*0.05);
+          ctx.fillStyle = "#a39785"; for(let j=0; j<4; j++) { ctx.fillRect(-w*0.04 + j*(w*0.025), -h*0.28, w*0.01, h*0.03); }
+
+          ctx.strokeStyle = "#ff0055"; ctx.lineWidth = Math.max(1, w*0.015);
+          ctx.beginPath(); ctx.moveTo(-w*0.15, -h*0.1); ctx.quadraticCurveTo(-w*0.3, -h*0.15, -w*0.25, 0); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(w*0.15, -h*0.1); ctx.quadraticCurveTo(w*0.3, -h*0.15, w*0.25, 0); ctx.stroke();
+
+          ctx.fillStyle = "#ff0055"; 
+          let atkLeft = e.state === 'chase' ? Math.sin(time/100)*h*0.1 : 0;
+          ctx.beginPath(); ctx.moveTo(-w*0.25, -h*0.25); ctx.lineTo(-w*0.45, 0 + atkLeft); ctx.lineTo(-w*0.15, h*0.35 + atkLeft); ctx.lineTo(-w*0.3, 0 + atkLeft); ctx.fill();
+          
+          let atkRight = e.state === 'chase' ? Math.cos(time/100)*h*0.1 : 0;
+          ctx.beginPath(); ctx.moveTo(w*0.25, -h*0.25); ctx.lineTo(w*0.45, 0 + atkRight); ctx.lineTo(w*0.15, h*0.35 + atkRight); ctx.lineTo(w*0.3, 0 + atkRight); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  });
+}
+
+function drawFist(x, y, scale, side, isPunchingThisHand, bobX, bobY) {
+    ctx.save();
+    
+    ctx.translate(x + bobX * side, y + bobY);
+    ctx.scale(scale * side, scale); 
+
+    let punchProgress = isPunchingThisHand ? (15 - isPunching) / 15 : 0;
+    
+    let punchOffsetY = isPunchingThisHand ? Math.sin(punchProgress * Math.PI) * 100 : 0; 
+    let punchOffsetX = isPunchingThisHand ? Math.sin(punchProgress * Math.PI) * 60 : 0; 
+    let punchTwist = isPunchingThisHand ? Math.sin(punchProgress * Math.PI) * 0.25 : 0; 
+
+    ctx.translate(punchOffsetX, -punchOffsetY);
+    ctx.rotate(punchTwist);
+
+    ctx.fillStyle = "#262626";
+    ctx.strokeStyle = "#111"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-40, 125); ctx.lineTo(-30, 20); ctx.lineTo(30, 20); ctx.lineTo(45, 125); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(-37, 25, 12, 90); ctx.fillRect(25, 25, 12, 90);  
+    ctx.fillStyle = "#888"; ctx.fillRect(-34, 10, 6, 25); ctx.fillRect(29, 10, 6, 25);
+    ctx.strokeRect(-37, 25, 12, 90); ctx.strokeRect(25, 25, 12, 90);
+
+    ctx.fillStyle = "#3d3d3d";
+    ctx.beginPath(); ctx.moveTo(-20, 125); ctx.lineTo(-20, 45); ctx.lineTo(0, 30); ctx.lineTo(20, 45); ctx.lineTo(20, 125); ctx.fill(); ctx.stroke();
+    
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(-10, 55, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(10, 55, 2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#00ffcc"; ctx.fillRect(-12, 70, 5, 20); ctx.fillRect(7, 70, 5, 20);
+
+    ctx.fillStyle = "#2a2a2a";
+    ctx.beginPath(); ctx.moveTo(-45, 20); ctx.lineTo(-50, -10); ctx.lineTo(-30, -35); ctx.lineTo(0, -42); ctx.lineTo(30, -30); ctx.lineTo(45, -5); ctx.lineTo(40, 20); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = "#555";
+    let knux = [ {x: -42, y: -15, w: 15, h: 17}, {x: -22, y: -30, w: 17, h: 20}, {x: -2, y: -37, w: 20, h: 22}, {x: 22, y: -25, w: 17, h: 20} ];
+    knux.forEach((k) => {
+        ctx.fillRect(k.x, k.y, k.w, k.h); ctx.strokeRect(k.x, k.y, k.w, k.h);
+        ctx.fillStyle = "rgba(130, 0, 0, 0.8)";
+        ctx.beginPath(); ctx.arc(k.x + 7, k.y + 7, 4 + Math.random()*2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#555"; 
+    });
+
+    ctx.fillStyle = "#444";
+    ctx.beginPath(); ctx.moveTo(45, -5); ctx.lineTo(62, -17); ctx.lineTo(70, 2); ctx.lineTo(40, 25); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-30, 5); ctx.lineTo(-10, 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(20, -5); ctx.lineTo(35, 7); ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawSwordHUD(bobX, bobY) {
+  ctx.save();
+  let swingProgress = isPunching > 0 ? (15 - isPunching) / 15 : 0;
+  
+  let sideMult = punchSide === 0 ? 1 : -1;
+  let baseX = c.width * 0.5 + (120 * sideMult) + bobX;
+  let baseY = c.height * 1.1 + bobY;
+  
+  let swingX = swingProgress > 0 ? (-Math.sin(swingProgress * Math.PI) * (c.width * 0.7)) * sideMult : 0;
+  let swingY = swingProgress > 0 ? Math.sin(swingProgress * Math.PI) * 60 : 0; 
+  let swingRot = swingProgress > 0 ? (swingProgress * Math.PI * 1.5) * -sideMult : 0;
+  
+  // Tira a espada da tela se estiver teleportando
+  if (isTransitioning) baseY += (teleportAnim * c.height);
+
+  ctx.translate(baseX + swingX, baseY + swingY);
+  ctx.rotate((-Math.PI / 6) * sideMult + swingRot);
+  
+  let scale = c.height / 250;
+  ctx.scale(scale, scale);
+  
+  ctx.shadowColor = "#00ffcc"; ctx.shadowBlur = 15;
+  ctx.fillStyle = "#00ffcc";
+  ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+  
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#111"; ctx.fillRect(-8, -50, 16, 50);
+  ctx.fillStyle = "#333"; ctx.fillRect(-3, -50, 6, 50);
+  
+  ctx.fillStyle = "#0a0a0a";
+  ctx.beginPath(); ctx.moveTo(-40, -50); ctx.lineTo(40, -50); ctx.lineTo(30, -60); ctx.lineTo(-30, -60); ctx.fill();
+  ctx.fillStyle = "#00ffcc"; ctx.fillRect(-25, -57, 50, 2);
+
+  ctx.fillStyle = "#006666";
+  ctx.beginPath(); ctx.moveTo(-20, -60); ctx.lineTo(0, -320); ctx.lineTo(0, -60); ctx.fill();
+  ctx.fillStyle = "#00cccc";
+  ctx.beginPath(); ctx.moveTo(0, -60); ctx.lineTo(0, -320); ctx.lineTo(20, -60); ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowBlur = 15; ctx.shadowColor = "#ffffff";
+  ctx.beginPath(); ctx.moveTo(-4, -60); ctx.lineTo(0, -310); ctx.lineTo(4, -60); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawWeapon() {
+  let playerSpeed = Math.sqrt(vx * vx + vy * vy);
+  let bobX = Math.sin(performance.now() / 200) * playerSpeed * 2;
+  let bobY = Math.abs(Math.cos(performance.now() / 200)) * playerSpeed * 3;
+
+  if (hasSword) {
+    drawSwordHUD(bobX, bobY);
+    ctx.fillStyle = "rgba(0, 255, 204, 0.5)"; 
+    if(!isTransitioning) ctx.fillRect(c.width / 2 - 2, c.height / 2 - 2, 4, 4);
+  } else {
+    let punchScale = c.height / 250; 
+    let handY = c.height * 0.95; 
+    
+    // Esconde os punhos durante o salto
+    if (isTransitioning) handY += (teleportAnim * c.height);
+
+    drawFist(c.width * 0.20, handY, punchScale, 1, (punchSide === 0 && isPunching > 0), bobX, bobY);
+    drawFist(c.width * 0.80, handY, punchScale, -1, (punchSide === 1 && isPunching > 0), bobX, bobY);
+
+    if(!isTransitioning) {
+        ctx.fillStyle = "#ff0055"; 
+        ctx.fillRect(c.width / 2 - 1, c.height / 2 - 5, 2, 3); ctx.fillRect(c.width / 2 - 1, c.height / 2 + 2, 2, 3); 
+        ctx.fillRect(c.width / 2 - 5, c.height / 2 - 1, 3, 2); ctx.fillRect(c.width / 2 + 2, c.height / 2 - 1, 3, 2); 
+    }
+  }
+  if(gunRecoil > 0) gunRecoil -= 4; 
+  if(isPunching > 0) isPunching -= 1; 
+}
+
+function drawMiniMap() {
+  const scale = 0.08;
+  const sizeX = map[0].length * tile * scale;
+  const sizeY = map.length * tile * scale;
+  
+  ctx.save();
+  // Se estiver transicionando, distorce o minimapa também
+  if (isTransitioning) {
+      ctx.globalAlpha = 1 - teleportAnim;
+      ctx.translate(Math.random() * (teleportAnim * 10), Math.random() * (teleportAnim * 10));
+  }
+
+  ctx.fillStyle = "rgba(5,0,10,0.85)"; ctx.fillRect(5, 5, sizeX + 5, sizeY + 5);
+  ctx.strokeStyle = "#ff0055"; ctx.lineWidth = 1; ctx.strokeRect(5, 5, sizeX + 5, sizeY + 5);
+  
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[0].length; x++) {
+      let block = map[y][x];
+      if (block !== "0") {
+        if (block === "1") ctx.fillStyle = "#b40050";
+        else if (block === "2") ctx.fillStyle = "#00c864";
+        else if (block === "3") ctx.fillStyle = "#643296";
+        else if (block === "4") ctx.fillStyle = "#ff0055"; 
+        ctx.fillRect(7 + x * tile * scale, 7 + y * tile * scale, tile * scale, tile * scale);
+      }
+    }
+  }
+  
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(7 + px * scale - 1, 7 + py * scale - 1, 2, 2);
+  
+  ctx.fillStyle = "#ffaa00";
+  enemies.forEach(e => { 
+    if(e.state !== 'dead') ctx.fillRect(7 + e.x * scale - 1, 7 + e.y * scale - 1, 2, 2); 
+  });
+  
+  ctx.fillStyle = "#00ffcc";
+  collectibles.forEach(c_item => {
+    if(c_item.active) ctx.fillRect(7 + c_item.x * scale - 1, 7 + c_item.y * scale - 1, 3, 3);
+  });
+  ctx.restore();
+}
+
+function canMove(nx, ny) {
+  let pts = [
+    {x: nx - playerRadius, y: ny - playerRadius}, {x: nx + playerRadius, y: ny - playerRadius},
+    {x: nx - playerRadius, y: ny + playerRadius}, {x: nx + playerRadius, y: ny + playerRadius}
+  ];
+  for(let p of pts) {
+    let mx = Math.floor(p.x / tile), my = Math.floor(p.y / tile);
+    if (map[my] && map[my][mx] !== "0") return false;
+  }
+  return true;
+}
+
+function updateEnemies(time) {
+  enemies.forEach((e, i) => {
+    if (e.state === 'dead') return; 
+
+    let dx = px - e.x, dy = py - e.y;
+    let distToPlayer = Math.sqrt(dx * dx + dy * dy);
+    let seesPlayer = hasLineOfSight(e.x, e.y, px, py);
+
+    if (seesPlayer) { e.state = 'chase'; e.tx = px; e.ty = py; e.path = []; } 
+    else if (e.state === 'chase') {
+      if (time - e.lastPathCalc > 500) { e.path = getPath(e.x, e.y, px, py); e.lastPathCalc = time; }
+      if (e.path && e.path.length > 0) {
+        e.tx = e.path[0].x; e.ty = e.path[0].y;
+        if (Math.sqrt(Math.pow(e.tx - e.x, 2) + Math.pow(e.ty - e.y, 2)) < 20) e.path.shift(); 
+      } else { e.state = 'idle'; e.timer = time; }
+    }
+
+    if (e.state === 'idle' && time - e.timer > 3000) {
+      let angle = Math.random() * Math.PI * 2;
+      e.tx = e.x + Math.cos(angle) * 150; e.ty = e.y + Math.sin(angle) * 150; e.timer = time;
+    }
+
+    let ex = e.tx - e.x, ey = e.ty - e.y;
+    let distToTargetPoint = Math.sqrt(ex * ex + ey * ey);
+    
+    if (distToTargetPoint > 5) {
+      let dirX = ex / distToTargetPoint, dirY = ey / distToTargetPoint;
+      let speed = e.state === 'chase' ? (1.0 * e.speedMult) : (0.4 * e.speedMult); 
+      
+      let sepX = 0, sepY = 0;
+      enemies.forEach((other, j) => {
+        if (i !== j && other.state !== 'dead') {
+          let ox = e.x - other.x, oy = e.y - other.y;
+          let odist = Math.sqrt(ox * ox + oy * oy);
+          if (odist < 50 && odist > 0) { sepX += (ox / odist); sepY += (oy / odist); }
+        }
+      });
+
+      let nx = e.x + (dirX + sepX * 0.5) * speed, ny = e.y + (dirY + sepY * 0.5) * speed;
+      let moved = false;
+      if (canMove(nx, e.y)) { e.x = nx; moved = true; }
+      if (canMove(e.x, ny)) { e.y = ny; moved = true; }
+    }
+
+    if (distToPlayer <= 80 && seesPlayer && time - e.lastHit > 1000) {
+      hp -= 10; flash(); e.lastHit = time;
+    }
+  });
+}
+
+function flash() {
+  let f = document.getElementById("flash"); 
+  f.style.transition = "opacity 0.1s";
+  f.style.opacity = 0.8; 
+  setTimeout(() => f.style.opacity = 0, 100);
+}
+
+function attack() {
+  if (paused || isDead || isTransitioning) return;
+  
+  if (isPunching > 0) return; 
+  
+  isPunching = 15; 
+  punchSide = Math.abs(punchSide - 1); 
+  viewKickBack = hasSword ? 25 : 15; 
+  
+  let atkDamage = hasSword ? 15 : 3;
+  let atkRange = hasSword ? 200 : 100;
+  let atkArc = hasSword ? 1.5 : 0.9; 
+  let pushForce = hasSword ? 120 : 50; 
+
+  enemies.forEach(e => {
+    if (e.state !== 'dead') {
+      let dx = e.x - px, dy = e.y - py;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < atkRange) { 
+        let angle = Math.atan2(dy, dx) - pa;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+
+        if (Math.abs(angle) < atkArc) {
+          e.hp -= atkDamage; 
+          
+          let pushX = e.x + Math.cos(pa) * pushForce; 
+          let pushY = e.y + Math.sin(pa) * pushForce;
+          if (canMove(pushX, e.y)) e.x = pushX;
+          if (canMove(e.x, pushY)) e.y = pushY;
+
+          if (e.hp <= 0) {
+            e.state = 'dead'; e.deathStart = performance.now();
+            killCount++;
+          } else { 
+            e.state = 'chase'; e.tx = px; e.ty = py; e.path = []; 
+          }
+        }
+      }
+    }
+  });
+}
+
+document.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  if (e.key == " " && !keys["space_locked"]) { attack(); keys["space_locked"] = true; }
+  if (!isDead && gameStarted) {
+    if (e.key.toLowerCase() == "p") togglePause();
+  }
+});
+document.addEventListener("keyup", e => { keys[e.key] = false; if(e.key == " ") keys["space_locked"] = false; });
+
+let last = performance.now();
+function loop(time) {
+  let dt = (time - last) / 16; last = time;
+
+  if (gameStarted && !isDead) {
+    if (!paused) {
+      if (!isTransitioning) {
+          if (keys["a"] || keys["ArrowLeft"]) pa -= turnSpeed * dt;
+          if (keys["d"] || keys["ArrowRight"]) pa += turnSpeed * dt;
+          if (keys["w"] || keys["ArrowUp"]) { vx += Math.cos(pa) * accel; vy += Math.sin(pa) * accel; }
+          if (keys["s"] || keys["ArrowDown"]) { vx -= Math.cos(pa) * accel; vy -= Math.sin(pa) * accel; }
+
+          let speed = Math.sqrt(vx * vx + vy * vy);
+          if (speed > maxSpeed) { vx = (vx / speed) * maxSpeed; vy = (vy / speed) * maxSpeed; }
+
+          let nx = px + vx * dt, ny = py + vy * dt;
+          if (canMove(nx, py)) px = nx; else vx = 0;
+          if (canMove(px, ny)) py = ny; else vy = 0;
+          vx *= friction; vy *= friction;
+          
+          collectibles.forEach(c_item => {
+            if(c_item.active && Math.hypot(px - c_item.x, py - c_item.y) < 40) {
+                c_item.active = false;
+                if (c_item.type === 'sword') {
+                    hasSword = true;
+                    flash();
+                    let t = document.getElementById("worldShiftText");
+                    t.innerText = "PLASMA SWORD ACQUIRED";
+                    t.style.color = "#00ffcc"; t.style.textShadow = "0 0 20px #00ffcc";
+                    t.style.opacity = 1;
+                    setTimeout(() => { t.style.opacity = 0; }, 2000);
+                }
+            }
+          });
+
+          updateEnemies(time); 
+          enemies = enemies.filter(e => e.state !== 'dead' || (time - e.deathStart < 800));
+          
+          let enemiesAlive = enemies.filter(e => e.state !== 'dead').length;
+          if(enemiesAlive === 0) {
+            isTransitioning = true;
+            teleportStart = time; // Marca o início do salto
+            triggerWorldShift(true);
+            setTimeout(() => {
+              startLevel(currentLevel + 1);
+            }, 3000);
+          }
+      } else {
+          // Atualiza o progresso do teletransporte enquanto trava o jogador
+          teleportAnim = (time - teleportStart) / 3000;
+          if (teleportAnim > 1) teleportAnim = 1;
+      }
+    }
+
+    draw3D(time); 
+    drawCollectibles(time); 
+    drawEnemies(time); 
+    drawWeapon(); 
+    drawMiniMap();
+    
+    let hpBars = "#".repeat(Math.ceil(hp/10)) + "-".repeat(10 - Math.ceil(hp/10));
+    let wpnStatus = hasSword ? "<span class='neon-cyan'>[ PLASMA SWORD ]</span>" : "<span class='neon-magenta' style='animation: pulse 1s infinite alternate;'>[ BERSERK ENGAGED ]</span>";
+    
+    document.getElementById("hud").innerHTML = `
+      WAVE: <span style="color:#ffaa00; font-size:22px;">[ ${currentLevel} ]</span> | KILLS: ${killCount}<br>
+      HP [<span class="neon-blood">${hpBars}</span>] ${Math.floor(hp)}%<br>
+      WEAPON: ${wpnStatus}
+    `;
+    if (hp <= 0) showDeathMenu();
+  }
+  requestAnimationFrame(loop);
+}
+loop(last);
+</script>
+</body>
+</html>
