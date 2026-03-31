@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Super Runner 3D - Pro Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: 'Segoe UI', sans-serif; }
+        .overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background: rgba(0,0,0,0.85); color: white; z-index: 10;
+        }
+        button { 
+            padding: 15px 40px; font-size: 20px; cursor: pointer; border: none; 
+            border-radius: 5px; background: #00d2ff; color: #000; font-weight: bold; margin: 10px;
+            transition: 0.2s;
+        }
+        button:hover { transform: scale(1.1); background: #fff; }
+        .skin-container { display: flex; gap: 10px; margin-top: 20px; }
+        .skin-btn { width: 40px; height: 40px; border: 2px solid white; cursor: pointer; border-radius: 50%; }
+        #game-ui { position: absolute; top: 20px; left: 20px; color: white; font-size: 28px; display: none; font-weight: bold; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">PONTOS: 0</div>
+
+    <div id="menu-start" class="overlay">
+        <h1 style="letter-spacing: 5px;">SUPER RUNNER 3D</h1>
+        <button onclick="startGame()">INICIAR CORRIDA</button>
+        <p>Escolha sua Skin:</p>
+        <div class="skin-container">
+            <div class="skin-btn" style="background: #00d2ff" onclick="changeSkin(0x00d2ff)"></div>
+            <div class="skin-btn" style="background: #ff0055" onclick="changeSkin(0xff0055)"></div>
+            <div class="skin-btn" style="background: #00ff55" onclick="changeSkin(0x00ff55)"></div>
+            <div class="skin-btn" style="background: #ffff00" onclick="changeSkin(0xffff00)"></div>
+        </div>
+    </div>
+
+    <div id="menu-death" class="overlay hidden">
+        <h1 style="color: #ff0055">BATEU!</h1>
+        <h2 id="final-score">PONTOS: 0</h2>
+        <button onclick="startGame()">TENTAR DE NOVO</button>
+        <button onclick="backToMenu()" style="background: #555; color: white;">MENU PRINCIPAL</button>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    let scene, camera, renderer, player;
+    let obstacles = [];
+    let gameActive = false;
+    let score = 0;
+    let speed = 0.45;
+    let currentLane = 1;
+    const lanes = [-2.5, 0, 2.5];
+    let isJumping = false;
+    let isDucking = false;
+    let velocityY = 0;
+    let playerColor = 0x00d2ff;
+    let duckTimeout;
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.Fog(0x0a0a1a, 20, 60);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 8);
+        camera.lookAt(0, 1, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const light = new THREE.DirectionalLight(0xffffff, 2);
+        light.position.set(5, 15, 10);
+        scene.add(light, new THREE.AmbientLight(0x606060));
+
+        // Chão com grade para dar sensação de velocidade
+        const floorGeo = new THREE.PlaneGeometry(10, 2000);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(1000, 100, 0x444444, 0x222222);
+        grid.position.y = 0.01;
+        scene.add(grid);
+
+        // Jogador
+        const playerGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+        const playerMat = new THREE.MeshStandardMaterial({ color: playerColor });
+        player = new THREE.Mesh(playerGeo, playerMat);
+        player.position.set(0, 0.6, 0);
+        scene.add(player);
+
+        animate();
+    }
+
+    function cancelDuck() {
+        isDucking = false;
+        player.scale.y = 1;
+        player.position.y = isJumping ? player.position.y : 0.6;
+        if(duckTimeout) clearTimeout(duckTimeout);
+    }
+
+    window.startGame = () => {
+        score = 0;
+        speed = 0.45;
+        currentLane = 1;
+        obstacles.forEach(o => scene.remove(o));
+        obstacles = [];
+        gameActive = true;
+        document.getElementById('game-ui').innerText = "PONTOS: 0";
+        document.getElementById('menu-start').classList.add('hidden');
+        document.getElementById('menu-death').classList.add('hidden');
+        document.getElementById('game-ui').style.display = 'block';
+    };
+
+    window.backToMenu = () => {
+        document.getElementById('menu-death').classList.add('hidden');
+        document.getElementById('menu-start').classList.remove('hidden');
+        document.getElementById('game-ui').style.display = 'none';
+    };
+
+    window.changeSkin = (color) => {
+        playerColor = color;
+        player.material.color.setHex(color);
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if (!gameActive) return;
+
+        // Movimento lateral
+        if (e.code === 'ArrowLeft' && currentLane > 0) currentLane--;
+        if (e.code === 'ArrowRight' && currentLane < 2) currentLane++;
+
+        // Pulo (Se estiver abaixado, cancela o abaixar e pula)
+        if (e.code === 'ArrowUp' || e.code === 'Space') {
+            if (!isJumping) {
+                if (isDucking) cancelDuck();
+                velocityY = 0.35;
+                isJumping = true;
+            }
+        }
+
+        // Abaixar
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+            if (!isJumping) {
+                isDucking = true;
+                player.scale.y = 0.4;
+                player.position.y = 0.3;
+                
+                if(duckTimeout) clearTimeout(duckTimeout);
+                duckTimeout = setTimeout(() => {
+                    if(isDucking) cancelDuck();
+                }, 700);
+            }
+        }
+    });
+
+    function spawnObstacle() {
+        if (!gameActive) return;
+        const lane = lanes[Math.floor(Math.random() * 3)];
+        const isHigh = Math.random() > 0.7;
+        
+        const obsGeo = isHigh ? new THREE.BoxGeometry(3, 0.8, 1) : new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        const obsMat = new THREE.MeshStandardMaterial({ color: isHigh ? 0xffcc00 : 0xff0044 });
+        const obs = new THREE.Mesh(obsGeo, obsMat);
+        
+        obs.userData = { isHigh };
+        obs.position.set(lane, isHigh ? 3.0 : 0.75, -80);
+        scene.add(obs);
+        obstacles.push(obs);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        if (gameActive) {
+            // Interpolação suave de pista
+            player.position.x += (lanes[currentLane] - player.position.x) * 0.25;
+
+            // Lógica de Pulo
+            if (isJumping) {
+                player.position.y += velocityY;
+                velocityY -= 0.02;
+                if (player.position.y <= 0.6) {
+                    player.position.y = 0.6;
+                    isJumping = false;
+                    velocityY = 0;
+                }
+            }
+
+            // Gerar obstáculos baseado no frame
+            if (Math.floor(performance.now() / 10) % 60 === 0) spawnObstacle();
+
+            // Loop de obstáculos
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z += speed;
+
+                // Checagem de Colisão
+                const dx = Math.abs(player.position.x - obs.position.x);
+                const dz = Math.abs(player.position.z - obs.position.z);
+                const dy = Math.abs(player.position.y - obs.position.y);
+
+                if (dx < 1.0 && dz < 1.0) {
+                    if (obs.userData.isHigh) {
+                        if (!isDucking) gameOver();
+                    } else {
+                        if (dy < 1.0) gameOver();
+                    }
+                }
+
+                if (obs.position.z > 15) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('game-ui').innerText = `PONTOS: ${score}`;
+                    speed += 0.0005;
+                }
+            }
+        }
+        renderer.render(scene, camera);
+    }
+
+    function gameOver() {
+        gameActive = false;
+        document.getElementById('final-score').innerText = `PONTOS: ${score}`;
+        document.getElementById('menu-death').classList.remove('hidden');
+    }
+
+    init();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
