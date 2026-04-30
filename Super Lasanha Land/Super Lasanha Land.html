@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Meu Jogo de Plataforma</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #222; }
+        canvas { display: block; background: #87CEEB; margin: 0 auto; border: 4px solid #333; }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 800;
+canvas.height = 400;
+
+// Configurações do Jogo
+const gravity = 0.8;
+const friction = 0.9;
+
+const player = {
+    x: 50,
+    y: 300,
+    width: 30,
+    height: 30,
+    speedX: 0,
+    speedY: 0,
+    jumpForce: 15,
+    grounded: false,
+    color: "#E74C3C"
+};
+
+const platforms = [
+    { x: 0, y: 380, width: 800, height: 20 }, // Chão
+    { x: 300, y: 280, width: 150, height: 20 },
+    { x: 100, y: 200, width: 150, height: 20 },
+    { x: 500, y: 150, width: 150, height: 20 }
+];
+
+const keys = {};
+
+// Controles
+window.addEventListener("keydown", e => keys[e.code] = true);
+window.addEventListener("keyup", e => keys[e.code] = false);
+
+function update() {
+    // Movimento Lateral
+    if (keys["ArrowRight"] || keys["KeyD"]) {
+        if (player.speedX < 5) player.speedX++;
+    } else if (keys["ArrowLeft"] || keys["KeyA"]) {
+        if (player.speedX > -5) player.speedX--;
+    }
+
+    // Pulo
+    if ((keys["ArrowUp"] || keys["Space"] || keys["KeyW"]) && player.grounded) {
+        player.speedY = -player.jumpForce;
+        player.grounded = false;
+    }
+
+    // Física
+    player.speedX *= friction;
+    player.speedY += gravity;
+    player.grounded = false;
+
+    // Movimentação
+    player.x += player.speedX;
+    player.y += player.speedY;
+
+    // Colisões com Plataformas
+    for (let plat of platforms) {
+        if (player.x < plat.x + plat.width &&
+            player.x + player.width > plat.x &&
+            player.y < plat.y + plat.height &&
+            player.y + player.height > plat.y) {
+            
+            // Colisão por cima (pousar)
+            if (player.speedY > 0) {
+                player.grounded = true;
+                player.speedY = 0;
+                player.y = plat.y - player.height;
+            }
+        }
+    }
+
+    // Limites da tela
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Desenhar Plataformas
+    ctx.fillStyle = "#2ECC71";
+    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.width, p.height));
+
+    // Desenhar Jogador
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    requestAnimationFrame(gameLoop);
+}
+
+function gameLoop() {
+    update();
+    draw();
+}
+
+gameLoop();
+</script>
+</body>
+</html>
