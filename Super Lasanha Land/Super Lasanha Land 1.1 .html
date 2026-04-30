@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Plataforma: Câmera e Moedas</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
+        canvas { display: block; background: #5c94fa; margin: 20px auto; border: 4px solid #fff; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .ui { position: absolute; top: 30px; left: 50%; transform: translateX(-400px); color: white; font-size: 24px; text-shadow: 2px 2px #000; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div class="ui">Moedas: <span id="score">0</span></div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreElement = document.getElementById("score");
+
+canvas.width = 800;
+canvas.height = 400;
+
+// Configurações
+const gravity = 0.8;
+const friction = 0.85;
+let score = 0;
+
+// Câmera
+let cameraX = 0;
+
+const player = {
+    x: 100,
+    y: 300,
+    width: 30,
+    height: 30,
+    speedX: 0,
+    speedY: 0,
+    jumpForce: 15,
+    grounded: false,
+    color: "#ff3e3e"
+};
+
+// Fase estendida (Mundo maior que a tela)
+const platforms = [
+    { x: 0, y: 380, width: 2000, height: 20 }, // Chão longo
+    { x: 300, y: 280, width: 150, height: 20 },
+    { x: 550, y: 200, width: 150, height: 20 },
+    { x: 800, y: 280, width: 200, height: 20 },
+    { x: 1100, y: 200, width: 150, height: 20 },
+    { x: 1400, y: 280, width: 200, height: 20 },
+    { x: 1700, y: 150, width: 150, height: 20 }
+];
+
+// Moedas coletáveis
+const coins = [
+    { x: 360, y: 240, collected: false },
+    { x: 610, y: 160, collected: false },
+    { x: 890, y: 240, collected: false },
+    { x: 1160, y: 160, collected: false },
+    { x: 1490, y: 240, collected: false }
+];
+
+const keys = {};
+
+window.addEventListener("keydown", e => keys[e.code] = true);
+window.addEventListener("keyup", e => keys[e.code] = false);
+
+function update() {
+    // Movimento
+    if (keys["ArrowRight"] || keys["KeyD"]) {
+        if (player.speedX < 6) player.speedX++;
+    } else if (keys["ArrowLeft"] || keys["KeyA"]) {
+        if (player.speedX > -6) player.speedX--;
+    }
+
+    if ((keys["ArrowUp"] || keys["Space"] || keys["KeyW"]) && player.grounded) {
+        player.speedY = -player.jumpForce;
+        player.grounded = false;
+    }
+
+    player.speedX *= friction;
+    player.speedY += gravity;
+    player.grounded = false;
+
+    player.x += player.speedX;
+    player.y += player.speedY;
+
+    // Colisão com plataformas
+    for (let plat of platforms) {
+        if (player.x < plat.x + plat.width &&
+            player.x + player.width > plat.x &&
+            player.y < plat.y + plat.height &&
+            player.y + player.height > plat.y) {
+            
+            if (player.speedY > 0) {
+                player.grounded = true;
+                player.speedY = 0;
+                player.y = plat.y - player.height;
+            }
+        }
+    }
+
+    // Coleta de Moedas
+    for (let coin of coins) {
+        if (!coin.collected &&
+            player.x < coin.x + 20 &&
+            player.x + player.width > coin.x &&
+            player.y < coin.y + 20 &&
+            player.y + player.height > coin.y) {
+            
+            coin.collected = true;
+            score++;
+            scoreElement.innerText = score;
+        }
+    }
+
+    // Lógica da Câmera (Segue o jogador mas trava nos limites)
+    cameraX = player.x - canvas.width / 2;
+    if (cameraX < 0) cameraX = 0;
+    if (cameraX > 1200) cameraX = 1200; // Limite do fim da fase
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Salva o estado atual e "empurra" o contexto da câmera
+    ctx.save();
+    ctx.translate(-cameraX, 0);
+
+    // Desenhar Moedas
+    ctx.fillStyle = "#FFD700";
+    coins.forEach(c => {
+        if (!c.collected) {
+            ctx.beginPath();
+            ctx.arc(c.x + 10, c.y + 10, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+
+    // Desenhar Plataformas
+    ctx.fillStyle = "#27ae60";
+    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.width, p.height));
+
+    // Desenhar Jogador
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    ctx.restore(); // Restaura para a UI (placar) não se mover
+
+    requestAnimationFrame(gameLoop);
+}
+
+function gameLoop() {
+    update();
+    draw();
+}
+
+gameLoop();
+</script>
+</body>
+</html>
